@@ -68,10 +68,16 @@ for i in $list; do
   # Name-based verification: every remote archive must exist locally (and read).
   # Counts are not comparable across batches: after pruning batch 1 the local
   # tree holds 100 files while the remote holds the next batch's 100.
+  # Distinguish "the query failed" from "there is nothing left".  Both used to
+  # produce an empty string, so a timed-out ls was reported as
+  # REMOTE_QUERY_FAILED and the point was skipped -- indistinguishable from an
+  # already-pruned point, which left 27 points holding 8,836 archives that every
+  # pass silently walked past.
   rlist=$(timeout 120 ssh -o ControlMaster=auto -o ControlPath=/tmp/opencode/cm_osg \
             -o ConnectTimeout=20 osg "ls $BASE/$dp/spvn_results_*.tar.gz 2>/dev/null" 2>/dev/null)
-  rlist=${rlist:-none}
-  if [ "$rlist" = "none" ]; then echo "$dp REMOTE_QUERY_FAILED"; skipped=$((skipped+1)); continue; fi
+  rq=$?
+  if [ $rq -ne 0 ]; then echo "$dp REMOTE_QUERY_FAILED"; skipped=$((skipped+1)); continue; fi
+  if [ -z "$rlist" ]; then echo "$dp ALREADY_EMPTY"; skipped=$((skipped+1)); continue; fi
   nrem=$(echo "$rlist" | wc -l)
   missing=0
   for rf in $rlist; do
