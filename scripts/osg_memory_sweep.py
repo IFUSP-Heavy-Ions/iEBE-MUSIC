@@ -29,6 +29,10 @@ import subprocess
 
 MEM_REASON = 'memory usage exceeded'
 DISK_REASON = 'disk usage exceeded'
+EXIT_REASON = 'OnExitHold expression'
+# Re-release a job at most this many times; beyond that it is failing for a
+# reason a retry will not fix and it should be looked at, not churned.
+MAX_HOLDS = 3
 
 
 def run(cmd):
@@ -52,9 +56,9 @@ def main():
 
     out = run([
         'condor_q', '-af:h', 'ClusterId', 'ProcId', 'JobStatus', 'MemoryUsage',
-        'RequestMemory', 'RequestDisk', 'HoldReason'
+        'RequestMemory', 'RequestDisk', 'HoldReason', 'NumHolds', 'ExitCode'
     ]).stdout.splitlines()
-    mem_held, disk_held, unexplained = [], [], []
+    mem_held, disk_held, exit_held, unexplained = [], [], [], []
     for ln in out[1:]:
         parts = ln.split()
         if len(parts) < 7 or parts[2] != '5':
@@ -62,14 +66,27 @@ def main():
         reason = ln[ln.find(parts[6]):]
         peak = int(parts[3]) if re.match(r'^\d+$', parts[3]) else 0
         cur_disk = int(parts[5]) if re.match(r'^\d+$', parts[5]) else 0
+        numholds = int(parts[7]) if re.match(r'^\d+$', parts[7]) else 0
+        exitcode = parts[8] if len(parts) > 8 else '-'
         if MEM_REASON in reason:
             mem_held.append((parts[0], parts[1], peak))
         elif DISK_REASON in reason:
             disk_held.append((parts[0], parts[1], cur_disk))
+        elif EXIT_REASON in reason or 'Transfer output files failure' in reason:
+            # Two classes the sweep used to ignore entirely, so they sat held
+            # for a day: a crashed run (non-zero exit) and an output transfer
+            # that failed at the execution point.  A retry usually lands on a
+            # different worker and succeeds; NumHolds stops endless churn.
+            if numholds < MAX_HOLDS:
+                exit_held.append((parts[0], parts[1], exitcode, numholds))
+            else:
+                unexplained.append((parts[0], parts[1],
+                                    'held %dx: exit=%s %s' %
+                                    (numholds, exitcode, reason[:60])))
         else:
             unexplained.append((parts[0], parts[1], reason[:90]))
 
-    if not mem_held and not disk_held:
+    if not mem_held and not disk_held and not exit_held:
         print('no memory- or disk-held jobs')
         for cid, pid, reason in unexplained:
             print('  unreleased %s.%s: %s' % (cid, pid, reason))
@@ -106,6 +123,17 @@ def main():
         print('%s disk %dKB -> %dKB edit=%s release=%s' %
               (job, cur, want, 'OK' if e.returncode == 0 else 'FAIL',
                'OK' if r.returncode == 0 else 'FAIL'))
+
+    for cid, pid, code, nh in sorted(exit_held):
+        job = '%s.%s' % (cid, pid)
+        if args.dry_run:
+            print('would retry %s (exit=%s, holds=%d)' % (job, code, nh))
+            released += 1
+            continue
+        r = run(['condor_release', job])
+        released += 1
+        print('%s retry exit=%s holds=%d release=%s' %
+              (job, code, nh, 'OK' if r.returncode == 0 else 'FAIL'))
 
     print('%d job(s) %s' % (released,
                             'would be released' if args.dry_run else 'released'))
