@@ -287,6 +287,20 @@ defaults — prefer those over guessing flags.
   deterministic events again and only wastes core-hours. Practical consequence: the queue
   self-refills to ~50k from already-submitted work, so a tranche larger than the remaining
   headroom is safe to submit in one go.
+- **Never put `checkpoint_exit_code` in an OSG submit file.** A submit file
+  carrying it makes the schedd inject `TARGET.HasSelfCheckpointTransfers` into
+  the job's Requirements.  Nothing in the pool advertises that attribute, so
+  **every slot rejects every job** -- and it fails silently: jobs stay idle,
+  `condor_q` looks normal, and the only clue is `condor_q -better-analyze`
+  saying "0 slots match" plus a stale "Last successful match".  On 2026-11-01
+  this cost ~18 h of zero placement on 34,122 queued jobs; the same line was in
+  both `Cluster_supports/*/generate_submission_script.py` templates, with the
+  checkpointing code long unused.  Requirements are also *baked into the job
+  classad at submit time*, so fixing the submit file does not help already-queued
+  jobs: they need
+  `condor_qedit -constraint 'JobStatus == 1 && ...' Requirements '<expr without the clause>'`.
+  Diagnose placement failures with `condor_q -better-analyze <cluster>`, never by
+  reading `condor_q`'s totals.
 - **Give maintenance jobs `JobPrio 100`.** A single re-run or test job submitted while a
   tranche is in flight sits behind tens of thousands of idle jobs and can look "lost" (it has
   no hold reason and no history record because it never started). `condor_qedit <cluster>.0

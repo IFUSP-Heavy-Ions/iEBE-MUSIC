@@ -358,7 +358,6 @@ periodic_remove = (ExitCode == 73)
 
 periodic_release = ((HoldReasonCode == 13 || HoldReasonCode == 26) && (time() - EnteredCurrentStatus) > 1200 )
 
-checkpoint_exit_code = 85
 
 # Send the job to Held state on failure.
 on_exit_hold = (ExitBySignal == True) || (ExitCode != 0 && ExitCode != 73)
@@ -541,7 +540,6 @@ periodic_remove = (ExitCode == 73)
 
 periodic_release = ((HoldReasonCode == 13 || HoldReasonCode == 26) && (time() - EnteredCurrentStatus) > 1200 )
 
-checkpoint_exit_code = 85
 
 # Send the job to Held state on failure.
 on_exit_hold = (ExitBySignal == True) || (ExitCode != 0 && ExitCode != 73)

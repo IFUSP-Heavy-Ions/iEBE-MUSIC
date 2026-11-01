@@ -259,7 +259,6 @@ max_idle = 1000
 # auto release hold jobs if they are caused by data transfer issues on OSG
 periodic_release = ((HoldReasonCode == 13 || HoldReasonCode == 26) && (time() - EnteredCurrentStatus) > 1200 )
 
-checkpoint_exit_code = 85
 
 # Send the job to Held state on failure.
 on_exit_hold = (ExitBySignal == True) || (ExitCode != 0 && ExitCode != 73)
@@ -615,7 +614,6 @@ max_idle = 1000
 # auto release hold jobs if they are caused by data transfer issues on OSG
 periodic_release = ((HoldReasonCode == 13 || HoldReasonCode == 26) && (time() - EnteredCurrentStatus) > 1200 )
 
-checkpoint_exit_code = 85
 
 # Send the job to Held state on failure.
 on_exit_hold = (ExitBySignal == True) || (ExitCode != 0 && ExitCode != 73)
