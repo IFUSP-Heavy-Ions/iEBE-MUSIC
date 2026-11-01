@@ -61,8 +61,18 @@ def archives_of(dp_dir):
     return files
 
 
-def check_point(dp, raw_root, merged_root, min_per_batch):
-    """Return (ok, reason, n_archives, bytes)."""
+def check_point(dp, raw_root, merged_root, min_per_batch, campaign_complete,
+                require_models):
+    """Return (ok, reason, n_archives, bytes).
+
+    campaign_complete skips the per-batch event count: for a campaign whose
+    submission has definitively finished, "no more archives will arrive" is
+    known, so the only requirement is that everything on disk was merged.  The
+    batch check exists for a *running* campaign, where a batch still to come
+    would silently strand its events (campaign 1 used four offsets and most of
+    its points carry a single batch, so the campaign-2 assumption would refuse
+    every one of them).
+    """
     mdir = os.path.join(merged_root, dp)
     h5 = os.path.join(mdir, dp + ".h5")
     if not os.path.exists(h5):
@@ -93,13 +103,14 @@ def check_point(dp, raw_root, merged_root, min_per_batch):
             # (2) all three batches present
             per_batch = [sum(1 for i in ids if lo <= i <= hi)
                          for lo, hi in BATCHES]
-            if any(c < min_per_batch for c in per_batch):
+            if (not campaign_complete) and any(c < min_per_batch
+                                               for c in per_batch):
                 return (False,
                         "batches incomplete: %s (need >=%d each)" %
                         (per_batch, min_per_batch), nraw, nbytes)
             # (3) campaign-2 model subgroups
             models = [k for k in last.keys() if k.startswith("deltaf_")]
-            if len(models) < 3:
+            if len(models) < require_models:
                 return False, "only %d deltaf subgroup(s)" % len(models), \
                        nraw, nbytes
     except Exception as exc:  # noqa: BLE001 - any read failure blocks deletion
@@ -136,6 +147,13 @@ def main():
                     help="design-point range, e.g. 1-1000")
     ap.add_argument("--min-per-batch", type=int, default=1900,
                     help="events required in each batch id range (default 1900)")
+    ap.add_argument("--models", type=int, default=3,
+                    help="deltaf_* subgroups required per event group "
+                         "(3 for campaign 2, 0 for campaign 1)")
+    ap.add_argument("--campaign-complete", action="store_true",
+                    help="submission has finished: skip the per-batch event "
+                         "count and require only that everything on disk was "
+                         "merged (use for campaign 1)")
     ap.add_argument("--apply", action="store_true",
                     help="actually delete; default is a dry run")
     args = ap.parse_args()
@@ -150,7 +168,8 @@ def main():
     for i in range(lo, hi + 1):
         dp = "dp%04d" % i
         ok, reason, n, nb = check_point(dp, args.raw, args.merged,
-                                        args.min_per_batch)
+                                        args.min_per_batch,
+                                        args.campaign_complete, args.models)
         if ok:
             pruned += 1
             files_freed += n
