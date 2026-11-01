@@ -96,7 +96,13 @@ def main():
     for cid, pid, peak in sorted(mem_held):
         want = args.memory
         if peak:
-            want = max(want, int(math.ceil(peak * 1.25 / 100.0)) * 100)
+            # MemoryUsage is nominally MB, but some startds report KB.  Taking
+            # 195360 (KB, i.e. 190 MB) as MB produced request_memory=244200, and
+            # such a job matches no slot at all -- it simply sits idle.  Normalise
+            # anything implausibly large and cap the result.
+            peak_mb = peak / 1024.0 if peak > 8192 else peak
+            want = max(want, int(math.ceil(peak_mb * 1.25 / 100.0)) * 100)
+            want = min(want, 4096)
         job = '%s.%s' % (cid, pid)
         if args.dry_run:
             print('would set %s request_memory=%d (peak %s MB)' %
