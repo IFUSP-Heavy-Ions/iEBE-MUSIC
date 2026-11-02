@@ -55,19 +55,24 @@ def main():
     args = ap.parse_args()
 
     out = run([
+        # HoldReason goes LAST: it is the only free-text field, so putting it
+        # anywhere earlier makes every following column shift by the number of
+        # words in the reason.  That silently made NumHolds parse as 0 and the
+        # MAX_HOLDS cap never engage, so failing jobs were recycled forever
+        # (~300 per half hour instead of stopping at 3 retries).
         'condor_q', '-af:h', 'ClusterId', 'ProcId', 'JobStatus', 'MemoryUsage',
-        'RequestMemory', 'RequestDisk', 'HoldReason', 'NumHolds', 'ExitCode'
+        'RequestMemory', 'RequestDisk', 'NumHolds', 'ExitCode', 'HoldReason'
     ]).stdout.splitlines()
     mem_held, disk_held, exit_held, unexplained = [], [], [], []
     for ln in out[1:]:
         parts = ln.split()
-        if len(parts) < 7 or parts[2] != '5':
+        if len(parts) < 9 or parts[2] != '5':
             continue
-        reason = ln[ln.find(parts[6]):]
+        reason = ' '.join(parts[8:])
         peak = int(parts[3]) if re.match(r'^\d+$', parts[3]) else 0
         cur_disk = int(parts[5]) if re.match(r'^\d+$', parts[5]) else 0
-        numholds = int(parts[7]) if re.match(r'^\d+$', parts[7]) else 0
-        exitcode = parts[8] if len(parts) > 8 else '-'
+        numholds = int(parts[6]) if re.match(r'^\d+$', parts[6]) else 0
+        exitcode = parts[7]
         if MEM_REASON in reason:
             # A few sites compare MemoryUsage(KB) against RequestMemory(MB), so the
             # job is killed for "using" e.g. 170899 MB, is released by this sweep,
