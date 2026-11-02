@@ -173,6 +173,18 @@ a 0.40-0.66 fm). Checks:
 - Pilot, the 16 extreme points of the handoff: all pass the edge checks; TRENTo
   agrees within errors; relative error 0.053-0.108% (largest at w = 0.35-0.5 fm).
 
+Results (360/360 points, 16 locally, 344 on condor cluster 2459):
+- `sigma_inel` = 370-726 fm^2, of which 73.9-94.8% is below `b_max`; b_max equals
+  the dictionaries' `b-max` exactly at every point.
+- Relative error: median 0.090%, max 0.113% (72 points above 0.1%, all at
+  w <= 0.64 fm). 0.086% of it is common to all points; the difference between a new
+  point and an original one has a median error of 0.034%, so the two sets share
+  the offset.
+- Edge bounds <= 9.1e-6 of `sigma_inel`. TRENTo vs exact: pull sd 1.00, one |pull|
+  > 3 (3.24), mean -0.030% (within the common offset).
+- Tail share above the 60% threshold: median 0.02%, max 0.88% (6 points above
+  0.5%); naive 60% = 59.48-60.01%. At 50%: max 0.12%.
+
 ## Running
 
 **Local HTCondor** (210 cores; every node sees `/data/mluzum` over NFS and has
