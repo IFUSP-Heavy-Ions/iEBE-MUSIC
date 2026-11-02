@@ -40,6 +40,9 @@ import sys
 
 BATCHES = ((0, 1999), (2000, 3999), (4000, 5999))
 
+# set from --events-per-job; each job writes this many events
+args_events_per_job = 20
+
 
 def group_ids(h5file):
     ids = []
@@ -56,8 +59,13 @@ def archives_of(dp_dir):
     Takes the design point's own directory (not the campaign root) -- globbing
     "dp*" beneath it found nothing, which made every point look already pruned.
     """
-    files = glob.glob(os.path.join(dp_dir, "tarballs", "*.tar.gz"))
-    files += glob.glob(os.path.join(dp_dir, "*.tar.gz"))
+    # Only real job archives: "spvn_results_*.tar.gz" (batch 1) and
+    # "spvn_results_e<offset>_*.tar.gz" (later batches).  A plain "*.tar.gz" also
+    # matched "raw_spvn_results.tar.gz", the whole-directory bundle left by the
+    # old layout, which made the count one higher than sources.txt and refused 62
+    # otherwise-complete design points.
+    files = glob.glob(os.path.join(dp_dir, "tarballs", "spvn_results_*.tar.gz"))
+    files += glob.glob(os.path.join(dp_dir, "spvn_results_*.tar.gz"))
     return files
 
 
@@ -127,12 +135,16 @@ def check_point(dp, raw_root, merged_root, min_per_batch, campaign_complete,
         return (False, "sources.txt says %s archives, %d on disk"
                 % (m.group(1), nraw), nraw, nbytes)
 
-    # (5) the merge is newer than the newest archive
-    log = os.path.join(mdir, "merge.log")
-    if os.path.exists(log):
-        newest = max(os.path.getmtime(p) for p in raw)
-        if os.path.getmtime(log) < newest:
-            return False, "merge older than newest archive", nraw, nbytes
+    # (5) the merged file actually covers the archives on disk.
+    # Comparing mtimes was wrong: an archive re-pulled from the AP has a fresh
+    # mtime and identical content, so every re-pulled point looked stale (626 of
+    # 1000 in campaign-1 A=96, each with 95-99 % event coverage, i.e. merged).
+    # Each job writes --events-per-job events, and a few percent are legitimately
+    # skipped (empty freeze-out surface), so require 90 % coverage.
+    expected = args_events_per_job * nraw
+    if expected and len(ids) < 0.90 * expected:
+        return (False, "covers %d of ~%d events (%.0f %%)"
+                % (len(ids), expected, 100.0 * len(ids) / expected), nraw, nbytes)
 
     return True, "ok", nraw, nbytes
 
@@ -147,6 +159,9 @@ def main():
                     help="design-point range, e.g. 1-1000")
     ap.add_argument("--min-per-batch", type=int, default=1900,
                     help="events required in each batch id range (default 1900)")
+    ap.add_argument("--events-per-job", type=int, default=20,
+                    help="events written per job, for the coverage check "
+                         "(default 20)")
     ap.add_argument("--models", type=int, default=3,
                     help="deltaf_* subgroups required per event group "
                          "(3 for campaign 2, 0 for campaign 1)")
@@ -162,6 +177,8 @@ def main():
     if not m:
         raise SystemExit("--dps must look like 1-1000")
     lo, hi = int(m.group(1)), int(m.group(2))
+    global args_events_per_job
+    args_events_per_job = args.events_per_job
 
     pruned = skipped = files_freed = bytes_freed = 0
     reasons = {}
