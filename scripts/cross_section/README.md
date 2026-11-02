@@ -150,6 +150,29 @@ the relevant noise is the point-to-point part.
   are above 0.5%, all with w >= 1.13 fm. At 50%: max 0.16%; at 70%: median 0.68%,
   max 3.2%.
 
+### zr96c2 extension (design_2001-2360, 2026-11-02)
+
+Campaign 2 keeps A=96's sigma_NN, nuclei and b_max, so dp0001-1000 reuse the A96
+table above (`zr96c2_results/sim_package/cross_sections_a96.csv`). The 360 new
+points run as campaign `a96c2ext`: dictionaries from `zr96_design_c2_ext/` (b-max
+equal to `MakeDictionaries.bmax_from_design` for every row), design
+`zr96c2_results/design/design_lhs2360_A96_c2_ext.csv`, output
+`/data/mluzum/cross_sections/a96c2ext/`, and the rows, with the `a96` columns and
+`campaign = a96`, in `zr96c2_results/prod/cross_sections_a96_ext.csv`. Settings,
+pools and orientations are unchanged, so the new points share the common offset of
+dp0001-1000.
+
+Some new points lie outside the old ranges (w down to 0.352 fm, R 4.80-5.70 fm,
+a 0.40-0.66 fm). Checks:
+- Sampled nuclei: rms radius / deformed-WS estimate is 0.979-0.995 over 14 points;
+  the out-of-range ones match in-range points of similar deformation.
+- Grid: at w = 0.352 fm (dp2051), db = 0.1 instead of 0.2 changes `sigma_inel` by
+  -0.0157 fm^2 (3.4e-5). That is exactly the trapezoid end correction
+  -(db^2/12) 2 pi, which is the same at every point; `sigma_below_bmax` moves by
+  1.7e-4.
+- Pilot, the 16 extreme points of the handoff: all pass the edge checks; TRENTo
+  agrees within errors; relative error 0.053-0.108% (largest at w = 0.35-0.5 fm).
+
 ## Running
 
 **Local HTCondor** (210 cores; every node sees `/data/mluzum` over NFS and has

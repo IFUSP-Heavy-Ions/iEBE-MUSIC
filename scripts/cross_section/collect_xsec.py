@@ -41,11 +41,15 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(
 DESIGN = {
     'a76': os.path.join(REPO, 'design', 'design_lhs2000.csv'),
     'a96': os.path.join(REPO, 'design', 'design_lhs2000_A96.csv'),
+    'a96c2ext': '/data/mluzum/zr96c2_results/design/design_lhs2360_A96_c2_ext.csv',
 }
 MERGED = {
     'a76': '/data/mluzum/ge76_results/merged',
     'a96': '/data/mluzum/zr96_results/merged',
+    'a96c2ext': '/data/mluzum/zr96c2_results/merged',
 }
+# value of the 'campaign' column: the extension rows continue the a96 table
+ROW_CAMPAIGN = {'a96c2ext': 'a96'}
 DESIGN_COLUMNS = ('WS_radius', 'WS_diffusiveness', 'beta_2', 'gamma', 'beta_3',
                   'sigma_plane', 'sigma_beta_3', 'nucleon-width')
 SUMMARY_COLUMNS = (
@@ -146,7 +150,9 @@ def main():
                 for key, value in a.items():
                     g.attrs[key] = value
             d = design[n - 1]
-            row = {'campaign': args.campaign, 'dp': n, 'design_label': d['label'],
+            assert d['label'] == f'design_{n:04d}', (d['label'], n)
+            row = {'campaign': ROW_CAMPAIGN.get(args.campaign, args.campaign),
+                   'dp': n, 'design_label': d['label'],
                    'A': a['A']}
             row.update({c: d[c] for c in DESIGN_COLUMNS})
             row.update({c: a[c] for c in SUMMARY_COLUMNS})

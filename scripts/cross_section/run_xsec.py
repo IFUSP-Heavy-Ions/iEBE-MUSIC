@@ -30,6 +30,10 @@ CAMPAIGNS = {
                         'parameter_dictionary_design_point_{n}.py'),
     'a96': os.path.join(REPO, 'zr96_design', 'DesignPoint{n}',
                         'parameter_dictionary_design_point_{n}.py'),
+    # zr96c2 extension, design_2001-2360 (campaign 2 keeps A=96's b_max and
+    # sigma_NN, so dp0001-1000 reuse 'a96')
+    'a96c2ext': os.path.join(REPO, 'zr96_design_c2_ext', 'DesignPoint{n}',
+                             'parameter_dictionary_design_point_{n}.py'),
 }
 
 
