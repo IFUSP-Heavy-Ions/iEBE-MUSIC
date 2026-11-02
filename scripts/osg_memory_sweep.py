@@ -69,9 +69,25 @@ def main():
         numholds = int(parts[7]) if re.match(r'^\d+$', parts[7]) else 0
         exitcode = parts[8] if len(parts) > 8 else '-'
         if MEM_REASON in reason:
-            mem_held.append((parts[0], parts[1], peak))
+            # A few sites compare MemoryUsage(KB) against RequestMemory(MB), so the
+            # job is killed for "using" e.g. 170899 MB, is released by this sweep,
+            # and is killed again: 21 holds on one job, ~120 jobs recycled every
+            # half hour for days.  After MAX_HOLDS retries the job is reported, not
+            # recycled -- it will not succeed at that site and the retries only
+            # burn slots.
+            if numholds < MAX_HOLDS:
+                mem_held.append((parts[0], parts[1], peak))
+            else:
+                unexplained.append((parts[0], parts[1],
+                                    'held %dx on memory: peak=%s %s' %
+                                    (numholds, peak, reason[:50])))
         elif DISK_REASON in reason:
-            disk_held.append((parts[0], parts[1], cur_disk))
+            if numholds < MAX_HOLDS:
+                disk_held.append((parts[0], parts[1], cur_disk))
+            else:
+                unexplained.append((parts[0], parts[1],
+                                    'held %dx on disk: %s' %
+                                    (numholds, reason[:50])))
         elif EXIT_REASON in reason or 'Transfer output files failure' in reason:
             # Two classes the sweep used to ignore entirely, so they sat held
             # for a day: a crashed run (non-zero exit) and an output transfer
