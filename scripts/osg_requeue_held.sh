@@ -22,6 +22,11 @@ PATTERN=${PATTERN:-zr96c2_x_dp}
 # case is the site bug that compares MemoryUsage in KB against RequestMemory in MB
 # and kills every job it is given.
 REASON=${REASON:-'(memory usage exceeded|OnExitHold|Transfer (input|output) files failure)'}
+# Optional host exclusion, e.g. EXCLUDE='wsu-lg02\.osris\.org|warlock21\.beocat\.ksu\.edu'.
+# Appended to the job Requirements so the retry cannot land on a host that has
+# only ever killed these jobs.  Derived from: hosts where held jobs died have no
+# overlap with hosts where jobs are currently running fine.
+EXCLUDE=${EXCLUDE:-}
 APPLY=0
 [ "${1:-}" = "--apply" ] && APPLY=1
 CM=${IBEM_CM:-/tmp/opencode/cm_osg}
@@ -38,7 +43,12 @@ if [ "$APPLY" = 0 ]; then
   exit 0
 fi
 
-$SSH osg "condor_qedit -constraint '$CONSTRAINT' NumHolds 0 2>&1 | tail -1" </dev/null 2>/dev/null
+if [ -n "$EXCLUDE" ]; then
+  # Use scripts/osg_add_exclusion.sh for this: doing it inline through nested
+  # ssh/xargs quoting printed "applied to N jobs" while changing nothing.  The
+  # exclusion must be verified in the classad afterwards.
+  echo "note: run scripts/osg_add_exclusion.sh separately, then this script"
+fi$SSH osg "condor_qedit -constraint '$CONSTRAINT' NumHolds 0 2>&1 | tail -1" </dev/null 2>/dev/null
 $SSH osg "condor_release -constraint '$CONSTRAINT' 2>&1 | tail -1" </dev/null 2>/dev/null
 sleep 5
 left=$($SSH osg "condor_q -constraint '$CONSTRAINT' -af ClusterId 2>/dev/null | wc -l" </dev/null 2>/dev/null)
