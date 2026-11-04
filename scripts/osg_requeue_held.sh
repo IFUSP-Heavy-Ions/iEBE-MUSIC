@@ -48,7 +48,9 @@ if [ -n "$EXCLUDE" ]; then
   # ssh/xargs quoting printed "applied to N jobs" while changing nothing.  The
   # exclusion must be verified in the classad afterwards.
   echo "note: run scripts/osg_add_exclusion.sh separately, then this script"
-fi$SSH osg "condor_qedit -constraint '$CONSTRAINT' NumHolds 0 2>&1 | tail -1" </dev/null 2>/dev/null
+fi
+
+$SSH osg "condor_qedit -constraint '$CONSTRAINT' NumHolds 0 2>&1 | tail -1" </dev/null 2>/dev/null
 $SSH osg "condor_release -constraint '$CONSTRAINT' 2>&1 | tail -1" </dev/null 2>/dev/null
 sleep 5
 left=$($SSH osg "condor_q -constraint '$CONSTRAINT' -af ClusterId 2>/dev/null | wc -l" </dev/null 2>/dev/null)
