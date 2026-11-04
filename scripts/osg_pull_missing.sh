@@ -32,7 +32,10 @@ pull_one() {
   mkdir -p "$dest" || { echo "$dp MKDIR_FAIL"; return; }
 
   # 1. one readdir+stat on the AP for the whole directory
-  rlist=$(ssh $SSH_OPTS osg "ls $BASE/$dp/*.tar.gz 2>/dev/null") \
+  # Trailing "|| true" inside the remote command: an empty or already-pruned
+  # directory makes ls exit non-zero, which was reported as SSH_FAIL and looked
+  # like a network problem on points that were simply complete.
+  rlist=$(ssh $SSH_OPTS osg "ls $BASE/$dp/*.tar.gz 2>/dev/null || true") \
     || { echo "$dp SSH_FAIL"; return; }
   if [ -z "$rlist" ]; then echo "$dp no_remote"; return; fi
 
