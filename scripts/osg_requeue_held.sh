@@ -17,14 +17,19 @@
 #   PATTERN='zr96c2_b1' osg_requeue_held.sh --apply
 set -u
 PATTERN=${PATTERN:-zr96c2_x_dp}
+# Only reasons a retry can plausibly fix.  Walltime (20 h) and "restarted too many
+# times" are not: releasing those just burns another 20 h or loops.  The dominant
+# case is the site bug that compares MemoryUsage in KB against RequestMemory in MB
+# and kills every job it is given.
+REASON=${REASON:-'(memory usage exceeded|OnExitHold|Transfer (input|output) files failure)'}
 APPLY=0
 [ "${1:-}" = "--apply" ] && APPLY=1
 CM=${IBEM_CM:-/tmp/opencode/cm_osg}
 SSH="ssh -o ControlMaster=auto -o ControlPath=$CM -o ConnectTimeout=25"
-CONSTRAINT="JobStatus == 5 && regexp(\"$PATTERN\", JobBatchName)"
+CONSTRAINT="JobStatus == 5 && regexp(\"$PATTERN\", JobBatchName) && regexp(\"$REASON\", HoldReason)"
 
 held=$($SSH osg "condor_q -constraint '$CONSTRAINT' -af ClusterId ProcId 2>/dev/null" </dev/null 2>/dev/null | wc -l)
-echo "held jobs matching $PATTERN: $held"
+echo "held jobs matching $PATTERN and a retryable reason: $held"
 if [ "$held" -eq 0 ]; then exit 0; fi
 
 if [ "$APPLY" = 0 ]; then
