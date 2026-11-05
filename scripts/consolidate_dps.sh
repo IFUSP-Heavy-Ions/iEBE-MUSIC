@@ -116,5 +116,5 @@ one() {
   echo "$dp DONE $(du -h "$odir/$dp.h5" | cut -f1) sources=$n [$fp]"
 }
 export -f one src_fingerprint src_total; export MIN_SOURCES export PROD OUT MERGE TMP
-xargs -P 2 -n 1 bash -c 'one "$0"' < "$LIST"
+xargs -r -P 2 -n 1 bash -c 'one "$0"' < "$LIST"
 echo CONSOLIDATION_DONE
