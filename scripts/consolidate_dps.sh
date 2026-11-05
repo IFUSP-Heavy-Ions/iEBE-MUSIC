@@ -54,6 +54,12 @@ src_total() {
   echo "$f" | sed -E 's/[a-z]+=//g' | awk '{print $1+$2+$3}'
 }
 
+batch_complete() {
+  local n=$1 rem
+  rem=$(( n % 100 ))
+  [ "$rem" -eq 0 ] || [ "$rem" -ge "$MIN_SOURCES" ]
+}
+
 # Build the work list: dps whose source count is a complete batch multiple and
 # differs from the count recorded in their merged file.
 if [ -z "$LIST" ]; then
@@ -64,6 +70,11 @@ if [ -z "$LIST" ]; then
     fp=$(src_fingerprint "$d")
     n=$(src_total "$d")
     [ "$n" -ge "$MIN_SOURCES" ] || continue
+    # A batch is 100 archives and counts as complete at MIN_SOURCES of them, so a
+    # count inside a batch is a moving target: merging dp at 111 archives means
+    # merging it again at 112, 113, ... as the block trickles in.  Wait for the
+    # batch boundary (90-100, 190-200, ...).
+    if ! batch_complete "$n"; then continue; fi
     if [ -s "$OUT/$dp/$dp.h5" ] && [ "$(cat "$OUT/$dp/sources.txt" 2>/dev/null)" = "$fp" ]; then
       continue
     fi
@@ -80,6 +91,7 @@ one() {
   fp=$(src_fingerprint "$d")
   n=$(src_total "$d")
   if [ "$n" -lt "$MIN_SOURCES" ]; then echo "$dp SKIP sources=$n"; return; fi
+  if ! batch_complete "$n"; then echo "$dp SKIP partial_batch n=$n"; return; fi
   if [ -s "$odir/$dp.h5" ] && [ "$(cat "$odir/sources.txt" 2>/dev/null)" = "$fp" ]; then
     echo "$dp up-to-date ($fp)"; return
   fi
@@ -115,6 +127,6 @@ one() {
   rm -rf "$tmpd"
   echo "$dp DONE $(du -h "$odir/$dp.h5" | cut -f1) sources=$n [$fp]"
 }
-export -f one src_fingerprint src_total; export MIN_SOURCES export PROD OUT MERGE TMP
+export -f one src_fingerprint src_total batch_complete; export MIN_SOURCES export PROD OUT MERGE TMP
 xargs -r -P 2 -n 1 bash -c 'one "$0"' < "$LIST"
 echo CONSOLIDATION_DONE
