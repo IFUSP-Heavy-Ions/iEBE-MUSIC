@@ -22,7 +22,10 @@ LIST=${1:-}
 PROD=${IBEM_PROD:-/data/mluzum/ge76_results/prod}
 OUT=${IBEM_OUT:-/data/mluzum/ge76_results/merged}
 MERGE=/data/mluzum/GeSe/scripts/merge_dp_h5.py
-TMP=/tmp/opencode/merge_tmp
+# Per-invocation temp dir: a fixed path is shared by every concurrent pass, so two
+# of them clobber each other's worklist and extraction directory.
+TMP=$(mktemp -d /tmp/opencode/merge_tmp.XXXXXX) || exit 1
+trap 'rm -rf "$TMP"' EXIT
 # A complete batch of 100 jobs yields ~96-99 archives (some events have empty
 # freeze-out surfaces), so requiring 100 sources would never merge a
 # single-batch point.  Treat a batch as complete at MIN_SOURCES.
@@ -56,7 +59,7 @@ src_total() {
 if [ -z "$LIST" ]; then
   LIST=$TMP/worklist.txt
   : > "$LIST"
-  for d in "$PROD"/dp*; do
+  for d in "$PROD"/${IBEM_ONLY:-dp*}; do
     dp=$(basename "$d")
     fp=$(src_fingerprint "$d")
     n=$(src_total "$d")
