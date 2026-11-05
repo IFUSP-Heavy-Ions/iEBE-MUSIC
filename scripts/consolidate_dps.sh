@@ -94,7 +94,8 @@ one() {
     src=$tmpd/spvn_results
     if [ "$(ls "$d"/tarballs/*.tar.gz 2>/dev/null | wc -l)" -gt 0 ]; then
       for t in "$d"/tarballs/*.tar.gz; do
-        tar xzf "$t" -C "$tmpd" || { echo "$dp EXTRACT_FAILED"; rm -rf "$tmpd"; return; }
+        [ -s "$t" ] || { echo "$dp SKIP_EMPTY $(basename "$t")"; continue; }
+        tar xzf "$t" -C "$tmpd" || { echo "$dp EXTRACT_FAILED $(basename "$t")"; rm -rf "$tmpd"; return; }
       done
     fi
     if [ -f "$d/raw_spvn_results.tar.gz" ]; then
