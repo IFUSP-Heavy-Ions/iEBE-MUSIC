@@ -51,8 +51,18 @@ def merge(src_dir, out_path):
             except OSError:
                 skipped.append(os.path.basename(path))
                 continue
+            # Open once to prove the file is readable before copying anything: a
+            # truncated file keeps the 8-byte signature but fails inside h5py, and
+            # discovering that midway through the group loop would leave a
+            # half-copied event in the output.
+            try:
+                with h5py.File(path, "r") as src:
+                    names = list(src.keys())
+            except OSError as exc:
+                skipped.append("%s (%s)" % (os.path.basename(path), str(exc)[:48]))
+                continue
             with h5py.File(path, "r") as src:
-                for gname in src.keys():
+                for gname in names:
                     if gname in out:
                         # duplicate event id (re-run overlap): keep the first
                         continue
