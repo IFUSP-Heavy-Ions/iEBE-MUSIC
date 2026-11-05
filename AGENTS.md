@@ -451,6 +451,33 @@ defaults — prefer those over guessing flags.
   `--set` appends parameter overrides. Local reruns are deterministic; across machines the
   initial state and hydro agree but iSS samples can differ (see Reproducibility above).
 
+- **A `condor_rm` with an empty cluster id and a `-constraint` deletes the whole queue.** Parsing
+  the cluster out of a failed `condor_submit` yields `""`, and `condor_rm "" -constraint '...'` is
+  not a no-op: it applied the constraint to every job the owner had, removing ~26,000 queued
+  batch-2 jobs on 2026-11-05 (the intended target was 89 procs of one cluster). The surviving
+  3,130 were the procs the constraint happened to keep, scattered across 294 points. Always verify
+  the cluster id is non-empty before using it, and prefer explicit `<cluster>.<proc>` ids over a
+  constraint. Recovery is resubmission, which is exact because events are deterministic, but it
+  costs a full transit of the queue.
+- **A 0-byte job archive (the packing step died) strands its whole design point.** It cannot pass a
+  non-empty arrival check, so the collector never deletes it and the point is never pruned; and the
+  merger's `tar xzf` fails, aborting the point. `osg_fetch_prune.sh` now reads sizes in the same
+  listing it already does, removes empty archives on both sides and logs `REMOTE_EMPTY`, and
+  `consolidate_dps.sh` skips them with `SKIP_EMPTY`. The job still has to be re-run (dp2310 job 18).
+- **An h5 truncated inside an archive keeps the HDF5 signature.** The merger's signature check
+  passed it, then h5py failed mid-copy and aborted the point with a traceback that did not name the
+  file — dp2358 lost four days to 14 such files, all from one job (12 of 0 bytes, 2 truncated at a
+  page boundary). `merge_dp_h5.py` now opens each file once before copying anything, names any it
+  cannot read, and skips it, so one bad job costs 20 events instead of the whole point. Repair is a
+  re-run of those events, replaced inside that one archive (entry count before/after must match).
+- **Merge only at batch boundaries.** A batch is 100 archives and is complete at `MIN_SOURCES` (90),
+  so a count in between (101–189) is a moving target: the point re-merges on every arrival. With
+  partial batch-2 blocks trickling in, 294 points sat in that range. `batch_complete()` merges only
+  when `n % 100 == 0` or `n % 100 >= MIN_SOURCES`; a point that genuinely ends short still merges.
+- **`condor_history` and `condor_q` are per-schedd but cluster ids are shared with other users.**
+  A range filter (`ClusterId >= X && <= Y`) returns strangers' jobs (`opt12_*`, `s34_test_*`), which
+  looks like our jobs finishing with no output. Filter on `JobBatchName`, never on a cluster range.
+
 ## Style
 
 YAPF only, google-based, configured in `.style.yapf` (2-space before comments, split before
