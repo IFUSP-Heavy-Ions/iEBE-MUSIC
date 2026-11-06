@@ -24,7 +24,11 @@ set -u
 APPLY=0
 TRANCH=150
 MAXQ=40000
-COMPLETE=${COMPLETE:-96}   # tagged archives that count as "batch 2 delivered"
+# A 100-job block yields 90-99 archives (a job whose events all skip the
+# freeze-out surface produces none), so "delivered" is the same 90 the merger
+# uses.  A higher threshold resubmits a point whose block legitimately ended at
+# 90-95, and does it again on every pass.
+COMPLETE=${COMPLETE:-90}
 while [ $# -gt 0 ]; do
   case "$1" in
     --apply) APPLY=1; shift ;;
