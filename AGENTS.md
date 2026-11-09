@@ -478,6 +478,15 @@ defaults — prefer those over guessing flags.
   A range filter (`ClusterId >= X && <= Y`) returns strangers' jobs (`opt12_*`, `s34_test_*`), which
   looks like our jobs finishing with no output. Filter on `JobBatchName`, never on a cluster range.
 
+- **A single-job repair must rewrite both `$(Process)` and `queue 100`.** The staged submit files
+  are blocks of 100 jobs, so `arguments = <dict> $(Process) 20 1 0 2000` plus `queue 100` reproduces
+  one block. To re-run one job of a block, write the index literally in `arguments` (the worker dials
+  `event_start_id = eventOffset + processId*20` and names the archive after `processId`, both taken
+  from argv, not from the slot's ProcId), point `transfer_output_files` at that exact name, and
+  change the queue line to `queue 1`. Leaving `queue 100` in place submits 100 identical jobs that
+  all write the same archive -- the result is correct but costs 100x the core-hours (done once:
+  five repairs, 499 redundant jobs).
+
 ## Style
 
 YAPF only, google-based, configured in `.style.yapf` (2-space before comments, split before
