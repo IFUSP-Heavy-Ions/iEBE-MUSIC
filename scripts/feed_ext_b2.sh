@@ -70,8 +70,8 @@ done < /tmp/opencode/ext_b2_all.txt
 echo "  points still needing block 2: $(wc -l < /tmp/opencode/ext_b2_need.txt)" | tee -a $LOG
 
 # drop points that already have this block in the queue
-$SSH 'condor_q -af JobBatchName 2>/dev/null' </dev/null 2>/dev/null |
-  grep -oE 'x_b2_dp[0-9]{4}' | sed 's/^x_b2_dp//' | sort -u > /tmp/opencode/ext_b2_queued.txt
+$SSH 'condor_q -af JobBatchName JobStatus 2>/dev/null' </dev/null 2>/dev/null |
+  awk '$2 != 5' | grep -oE 'x_b2_dp[0-9]{4}' | sed 's/^x_b2_dp//' | sort -u > /tmp/opencode/ext_b2_queued.txt
 comm -23 <(sort /tmp/opencode/ext_b2_need.txt) /tmp/opencode/ext_b2_queued.txt > /tmp/opencode/ext_b2_todo.txt
 echo "  already queued: $(wc -l < /tmp/opencode/ext_b2_queued.txt), to submit: $(wc -l < /tmp/opencode/ext_b2_todo.txt)" | tee -a $LOG
 

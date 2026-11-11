@@ -66,9 +66,11 @@ for d in sorted(glob.glob(os.path.join(prod, 'dp0*'))):
 PY
 echo "  points still needing batch 2: $(wc -l < /tmp/opencode/feed2_all.txt)" | tee -a $LOG
 
-# 2. drop the ones already queued (this is what prevents double submission)
-$SSH 'condor_q -af JobBatchName 2>/dev/null' </dev/null 2>/dev/null |
-  grep -oE 'b2_dp[0-9]{4}' | sed 's/^b2_dp//' | sort -u > /tmp/opencode/feed2_queued.txt
+# 2. drop the ones already queued.  Held jobs do NOT count: a point whose only
+#    survivors are held is otherwise 'queued' forever and never resubmitted
+#    (39 of them were left with one held job and 89 removed by a condor_rm). (this is what prevents double submission)
+$SSH 'condor_q -af JobBatchName JobStatus 2>/dev/null' </dev/null 2>/dev/null |
+  awk '$2 != 5' | grep -oE 'b2_dp[0-9]{4}' | sed 's/^b2_dp//' | sort -u > /tmp/opencode/feed2_queued.txt
 sort /tmp/opencode/feed2_all.txt | comm -23 - /tmp/opencode/feed2_queued.txt > /tmp/opencode/feed2_todo.txt
 echo "  already queued: $(wc -l < /tmp/opencode/feed2_queued.txt), to submit: $(wc -l < /tmp/opencode/feed2_todo.txt)" | tee -a $LOG
 
