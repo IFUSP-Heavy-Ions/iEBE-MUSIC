@@ -107,7 +107,25 @@ one() {
     if [ "$(ls "$d"/tarballs/*.tar.gz 2>/dev/null | wc -l)" -gt 0 ]; then
       for t in "$d"/tarballs/*.tar.gz; do
         [ -s "$t" ] || { echo "$dp SKIP_EMPTY $(basename "$t")"; continue; }
-        tar xzf "$t" -C "$tmpd" || { echo "$dp EXTRACT_FAILED $(basename "$t")"; rm -rf "$tmpd"; return; }
+        # A truncated archive (a killed output transfer leaves one) must not
+        # abort the point: move it aside, say so, and let the next collect pass
+        # re-fetch it by name.  The point then falls one archive short of its
+        # batch boundary and simply waits, instead of re-extracting everything
+        # on every pass and failing at the same file.
+        if ! tar xzf "$t" -C "$tmpd"; then
+          # Distinguish a damaged archive from an environmental failure: a full
+          # disk or a transient I/O error makes tar fail on a perfectly good
+          # file.  gzip -t reads the whole stream, so if it passes the archive is
+          # intact -- retry the point later instead of condemning the data (a
+          # transient ENOSPC once quarantined 103 good archives).
+          if gzip -t "$t" 2>/dev/null; then
+            echo "$dp EXTRACT_RETRY $(basename "$t") archive intact, extraction failed"
+            rm -rf "$tmpd"; return
+          fi
+          echo "$dp SKIP_CORRUPT $(basename "$t")"
+          mv -f "$t" "$t.corrupt"
+          continue
+        fi
       done
     fi
     if [ -f "$d/raw_spvn_results.tar.gz" ]; then
@@ -120,6 +138,9 @@ one() {
     echo "$dp MERGE_FAILED"; rm -f "$odir/$dp.h5.tmp"; rm -rf "$tmpd"; return
   fi
   mv "$odir/$dp.h5.tmp" "$odir/$dp.h5"
+  # Recompute: a quarantined archive changes the count, and recording the stale
+  # fingerprint would make the next pass re-merge the same point forever.
+  fp=$(src_fingerprint "$d")
   echo "$fp" > "$odir/sources.txt"
   if ls "$src"/events_drawn_*.csv >/dev/null 2>&1; then
     ( cd "$src" && tar czf "$odir/csv.tgz" events_drawn_*.csv ) || echo "$dp CSV_TAR_FAILED"
