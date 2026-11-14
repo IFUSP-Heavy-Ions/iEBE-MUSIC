@@ -89,8 +89,14 @@ $SSH 'bash -s' <<'REMOTE' 2>&1 | tee -a $LOG
 set -u
 EXCL=$(sed -n '2p' /tmp/opencode/recover_excl.txt)
 BASE='((TARGET.HasSingularity && StringListIMember("stash",HasFileTransferPluginMethods)) && (TARGET.Arch == "X86_64") && TARGET.HasContainer && TARGET.HasSIF && (TARGET.Memory >= RequestMemory) && (TARGET.HasFileTransfer) && TARGET.HasSingularity && TARGET.SINGULARITY_CAN_USE_SIF)'
-echo "  applying the exclusion to idle and held jobs"
-condor_qedit -constraint 'JobStatus == 1 || JobStatus == 5' Requirements "$BASE && !regexp(\"$EXCL\", TARGET.Machine)" 2>&1 | tail -1
+# An empty pattern matches every host, so !regexp("") would reject the whole
+# pool.  With nothing to exclude, leave Requirements alone and just release.
+if [ -n "$EXCL" ]; then
+  echo "  applying the exclusion to idle and held jobs"
+  condor_qedit -constraint 'JobStatus == 1 || JobStatus == 5' Requirements "$BASE && !regexp(\"$EXCL\", TARGET.Machine)" 2>&1 | tail -1
+else
+  echo "  no host qualifies for exclusion; leaving Requirements untouched"
+fi
 condor_qedit -constraint 'JobStatus == 5' NumHolds 0 2>&1 | tail -1
 condor_release -constraint 'JobStatus == 5' 2>&1 | tail -1
 sleep 5
