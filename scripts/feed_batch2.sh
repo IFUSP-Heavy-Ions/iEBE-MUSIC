@@ -52,7 +52,7 @@ echo "[$(date +%H:%M)] planning (complete>=$COMPLETE, tranche=$TRANCH, maxq=$MAX
 nice -n 19 python3 - "$PROD" "$COMPLETE" > /tmp/opencode/feed2_all.txt <<'PY'
 import glob, os, sys
 prod, complete = sys.argv[1], int(sys.argv[2])
-for d in sorted(glob.glob(os.path.join(prod, 'dp0*'))):
+for d in sorted(glob.glob(os.path.join(prod, 'dp*'))):   # dp1000 does not match dp0*
     dp = os.path.basename(d)
     try:
         n = int(dp[2:])
