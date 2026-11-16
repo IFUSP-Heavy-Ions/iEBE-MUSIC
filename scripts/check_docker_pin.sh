@@ -69,8 +69,8 @@ git -C "${SCRATCH}" remote add origin "${REMOTE}"
 if ! git -C "${SCRATCH}" fetch -q --depth=1 origin "${PIN}"; then
     fail "pin ${PIN} is not fetchable from ${REMOTE}.
       Either it was never pushed, or the branch history no longer makes it
-      reachable. Note that get_code_packages_test.sh clones --branch XSCAPE /
-      --branch main before fetching its SHA, so a force-push or branch deletion
+      reachable. Note that get_code_packages.sh clones --branch QGP-USP
+      before fetching its SHA, so a force-push or branch deletion
       upstream can make a previously valid pin unfetchable."
 fi
 git -C "${SCRATCH}" checkout -q FETCH_HEAD
@@ -83,11 +83,11 @@ echo "OK: pin ${PIN} is fetchable from ${REMOTE} and checks out exactly."
 
 # 4. every shell script the build executes parses.
 #
-# CI's "Build Test" runs get_code_packages_test.sh and compile_code_packages.sh
+# CI's "Build Test" runs get_code_packages.sh and compile_code_packages.sh
 # straight from the branch tip, so one syntax error anywhere in them turns the
 # branch red in about 40 seconds. That is exactly what happened: an edit to the
 # Dockerfile bootstrap path left a stray `fi` in the isobar-restore block of
-# get_code_packages_test.sh, the branch had not been pushed in a while, and three
+# get_code_packages.sh, the branch had not been pushed in a while, and three
 # consecutive pushes failed on it before the container build surfaced the same
 # error. `bash -n` catches it in milliseconds, which is the point of running it
 # here instead of waiting for the runner.

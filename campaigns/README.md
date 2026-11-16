@@ -31,7 +31,7 @@ image (hundreds of MB; archived outside git, identified by md5), and the results
 image (md5)
   └─ docker/Dockerfile                        base image by digest, pinned Python packages
        └─ framework @ commit                  <- "the revision of the chain"
-            └─ codes/get_code_packages*.sh    each physics code @ commit (+ patch)
+            └─ codes/get_code_packages.sh     each physics code @ commit         
 ```
 
 The framework commit therefore fixes every source in the image, and

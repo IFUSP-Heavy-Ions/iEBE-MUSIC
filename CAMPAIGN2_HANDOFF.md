@@ -18,7 +18,7 @@ all numbers: the soft-sector investigation log,
 |---|---|---|
 | hydro initial state | `Initial_profile 92`: free-streamed e only, fluid at rest | `Initial_profile 9`: full free-streaming T^munu (e, u^mu, pi^munu, Pi) |
 | particlization | one iSS run per surface, linear CE delta f | one iSS + decays + analysis per **delta f model**: `Grad22`, `CE`, `PTB`, same surface and seeds |
-| PTB delta f | - | new in iSS (`codes/patches/iSS_PTB_deltaf.patch`, `iss_dict['deltaf_model'] = 1`) |
+| PTB delta f | - | new in iSS (branch `QGP-USP` of `IFUSP-Heavy-Ions/iSS`; at the time of the campaign `codes/patches/iSS_PTB_deltaf.patch`, `iss_dict['deltaf_model'] = 1`) |
 | identified-particle pT grid | 0.2-2.0 GeV, 41 bins of 0.0439 GeV | **0-5 GeV, 100 bins of 0.05 GeV** |
 | `spvn_results_<id>.h5` | flat | per-model sub-groups `deltaf_<name>`, attrs (see 5) |
 | A=96 normalization prior | 3-10 | **6-13** (`design/design_lhs2000_A96_c2.csv`) |

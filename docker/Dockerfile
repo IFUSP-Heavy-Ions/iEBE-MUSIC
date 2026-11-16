@@ -97,7 +97,7 @@ RUN cd ${HOME} && \
     git checkout -q FETCH_HEAD && \
     test "$(git rev-parse HEAD)" = "17ae5b49c083a33783f72ed5d00b8822973a2d70" && \
     cd codes && \
-    bash get_code_packages_test.sh && \
+    bash get_code_packages.sh && \
     ./compile_code_packages.sh && \
     cd ../EOS_database && \
     bash download_EOSdatabase1D.sh && \

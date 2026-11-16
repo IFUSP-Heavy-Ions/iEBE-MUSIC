@@ -33,7 +33,7 @@ suite, no linter config, and no typechecker** — verification means running one
 ## Setup
 
 ```bash
-cd codes && bash get_code_packages.sh && bash compile_code_packages.sh && cd ..
+cd codes && bash get_code_packages.sh && bash compile_code_packages.sh && cd ..   # every code at a pinned commit
 ```
 
 30–60 min. This also downloads EOS tables, hdf5 delta-f tables, and nucleus configurations.
@@ -378,7 +378,8 @@ defaults — prefer those over guessing flags.
   `paraRdr.setVal("rap_min", ...)` before each. Editing `rap_min` in `parameters.dat` changes
   nothing. The identified-species `_vndata_y_-0.5_0.5` files are ALICE's window, not yours. Any new
   rapidity analysis has to be added as another entry in that list - see the boost-invariant
-  `_boostinv` block and `codes/patches/hadronic_afterburner_toolkit_boost_invariant_dNdy.patch`.
+  `_boostinv` block (commit `d00b6c9` on branch `QGP-USP` of
+  `IFUSP-Heavy-Ions/hadronic_afterburner_toolkit`).
 - **Boost-invariant dN/dy must not be cut in rapidity.** For (2+1)-d runs the density is flat and
   `dN/dy = N(all particles)/(y_RB - y_LB)`. The toolkit's `dN_ev_avg = Q0/N_events/(rap_max-rap_min)`
   computed on a cut window loses the daughters that decayed outside it and is biased low (0.7 % at
@@ -437,8 +438,8 @@ defaults — prefer those over guessing flags.
   pi/(e+P) ~ 0.1 at freeze-out (eta/s ~ 0.35 at T_f, e.g. zr96 dp0583) the CE delta f
   exceeds 1 for most of the emission above 1 GeV and the result is the clamp (single-cell
   closure: CE reproduces 64% of pi at pi/(e+P) = 0.15). `deltaf_model 1` (PTB,
-  `codes/patches/iSS_PTB_deltaf.patch`) is positive definite and reproduces pi to 5% there;
-  `deltaf_model 0` is byte-identical to the unpatched sampler.
+  commit `77d8a3e` on branch `QGP-USP` of `IFUSP-Heavy-Ions/iSS`) is positive definite and reproduces pi to 5% there;
+  `deltaf_model 0` is byte-identical to the upstream sampler.
 - **One particlization per delta f model, one h5 per event.** With
   `control_dict['deltaf_models']` the driver runs iSS + decays + analysis once per model on
   the same surface and seeds, and `spvn_results_<id>.h5` holds each model's tables in

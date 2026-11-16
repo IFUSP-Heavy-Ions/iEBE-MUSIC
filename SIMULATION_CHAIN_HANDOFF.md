@@ -12,7 +12,7 @@ documents; it maps them.
 | `CAMPAIGN2_HANDOFF.md` | what the *current* physics configuration is (full T^munu into MUSIC, three delta-f models, pT grid) and the validation numbers to compare against |
 | `SETUP.md`, `README.md` | installing locally and running a single event |
 | `docker/Dockerfile` | the image, commented line by line, including why every pin is a pin |
-| `codes/get_code_packages_test.sh` | every external repository and its exact commit |
+| `codes/get_code_packages.sh` | every external repository and its exact commit |
 | `NUMERICAL_PRECISION_REPORT.md` | what the numerics can resolve, and the reproducibility evidence |
 | `<results>/merged/REPRODUCTION/` | the finished campaign's provenance package: SIF md5, binary md5s, revision, design, dictionaries, submit files |
 
@@ -20,13 +20,13 @@ documents; it maps them.
 
 | stage | code | lives in | notes |
 |---|---|---|---|
-| nucleon positions | Isobar-Sampler fork **plus an in-tree `build_isobars.py`** | `codes/isobar_sampler_code/` | the in-tree file *replaces* the fork's and carries the deformation fluctuations (`sigma_beta_2/3`, `sigma_gamma`) |
-| initial condition | TRENTo | `codes/trento_code/` | fork `jppicchetti/trento_sync` |
+| nucleon positions | Isobar-Sampler, branch `QGP-USP` | `codes/isobar_sampler_code/` | the branch carries the deterministic seeds and the deformation fluctuations (`sigma_beta_2/3`, `sigma_gamma`) |
+| initial condition | TRENTo | `codes/trento_code/` | `IFUSP-Heavy-Ions/trento`, branch `QGP-USP` |
 | free streaming | `freestream` (pip) | — | pinned in the Dockerfile; physics-critical |
 | hydrodynamics | MUSIC | `codes/MUSIC_code/` | EOS tables downloaded at build time |
-| particlization | iSS | `codes/iSS_code/` | carries the PTB delta-f patch |
+| particlization | iSS | `codes/iSS_code/` | `IFUSP-Heavy-Ions/iSS`, branch `QGP-USP`: carries the PTB delta f |
 | afterburner | UrQMD or SMASH, or `decay` (none) | `codes/urqmd_code/`, `codes/smash_code/` | `afterburner_type: "decay"` is what campaign 2 uses |
-| analysis | hadronic_afterburner_toolkit | `codes/hadronic_afterburner_toolkit_code/` | carries the boost-invariant dN/dy patch |
+| analysis | hadronic_afterburner_toolkit | `codes/hadronic_afterburner_toolkit_code/` | `IFUSP-Heavy-Ions/hadronic_afterburner_toolkit`, branch `QGP-USP`: carries the boost-invariant dN/dy |
 | glue | `codes/hydro_plus_UrQMD_driver.py`, `generate_jobs.py` | repo root | in-repo, not fetched |
 
 Optional backends that the current path never touches: `3dMCGlauber`, `ipglasma`,
@@ -44,33 +44,30 @@ Three layers, all immutable by construction:
    `17ae5b49c083a33783f72ed5d00b8822973a2d70`. It cannot name its own commit, so
    it always points one commit back: bump it in the commit *after* the one you
    want.
-3. **Every external code** — `codes/get_code_packages_test.sh`, one
+3. **Every external code** — `codes/get_code_packages.sh`, one
    `clone_repo_at_commit <url> <dir> <sha>` per package:
 
-| directory | repository | pin |
-|---|---|---|
-| `isobar_sampler_code` | `github.com/mluzum/Isobar-Sampler` | `bc586de` |
-| `trento_code` | `github.com/jppicchetti/trento_sync` | `4837013` |
-| `3dMCGlauber_code` | `github.com/mluzum/3dMCGlauber` | `1d9856c` |
-| `ipglasma_code` | `github.com/chunshen1987/ipglasma` | `bf92fe1` |
-| `kompost_code` | `github.com/chunshen1987/KoMPoST` | `ad5fe9d` |
-| `MUSIC_code` | `github.com/MUSIC-fluid/MUSIC` | `cfcc264` |
-| `iSS_code` | `github.com/chunshen1987/iSS` | `d242555` |
-| `photonEmission_hydroInterface_code` | `github.com/chunshen1987/photonEmission_hydroInterface` | `b80fb78` |
-| `urqmd_code` | `bitbucket.org/Chunshen1987/urqmd_afterburner` | `09eeac2` |
-| `smash_code` | `github.com/smash-transport/smash` | tag `SMASH-3.2.2` |
-| `hadronic_afterburner_toolkit_code` | `github.com/chunshen1987/hadronic_afterburner_toolkit` | `2326ba2` |
+| directory | repository | pin | what the fork adds |
+|---|---|---|---|
+| `isobar_sampler_code` | `github.com/mluzum/Isobar-Sampler` (`QGP-USP`) | `67b804a` | deterministic seeds, faster sampler, fluctuating deformation, on top of `Public_Release` `bc586de` |
+| `trento_code` | `github.com/IFUSP-Heavy-Ions/trento` (`QGP-USP`) | `4837013` | nucleon-configuration interface, on top of Duke-QCD `10960b2` |
+| `MUSIC_code` | `github.com/IFUSP-Heavy-Ions/MUSIC` (`QGP-USP`) | `cfcc264` | nothing yet (upstream `XSCAPE`) |
+| `iSS_code` | `github.com/IFUSP-Heavy-Ions/iSS` (`QGP-USP`) | `77d8a3e` | PTB delta f, on top of upstream `XSCAPE` `d242555` |
+| `hadronic_afterburner_toolkit_code` | `github.com/IFUSP-Heavy-Ions/hadronic_afterburner_toolkit` (`QGP-USP`) | `d00b6c9` | boost-invariant dN/dy, on top of upstream `2326ba2` |
+| `3dMCGlauber_code` | `github.com/mluzum/3dMCGlauber` | `1d9856c` | (optional backend) |
+| `ipglasma_code` | `github.com/chunshen1987/ipglasma` | `bf92fe1` | (optional backend) |
+| `kompost_code` | `github.com/chunshen1987/KoMPoST` | `ad5fe9d` | (optional backend) |
+| `photonEmission_hydroInterface_code` | `github.com/chunshen1987/photonEmission_hydroInterface` | `b80fb78` | (optional backend) |
+| `urqmd_code` | `bitbucket.org/Chunshen1987/urqmd_afterburner` | `09eeac2` | (optional backend) |
+| `smash_code` | `github.com/smash-transport/smash` | tag `SMASH-3.2.2` | (optional backend) |
 
-Patches that are applied on top of the clones live in `codes/patches/`
-(currently the boost-invariant dN/dy patch and the iSS PTB delta-f patch); the
-bootstrap applies them, and the Dockerfile slimming step asserts the patched
-artefacts exist.
-
-**Important asymmetry**: `codes/isobar_sampler_code/exec/build_isobars.py` and
-`correlation_files/Ru_correlation_Alvioli.npy` are **tracked in this repo** and
-are restored *over* the Isobar-Sampler clone. The production sampler logic is
-therefore the version at the iEBE-MUSIC pin, not the fork's. If you upgrade the
-sampler, decide explicitly which of the two you are changing.
+Nothing is patched or overlaid during the build: every modification this chain
+makes to a physics code is an ordinary commit on the `QGP-USP` branch of its
+fork. To change a component, commit to the fork, then bump its SHA in
+`codes/get_code_packages.sh`. (Campaign zr96-c2 was built the old way -- two
+patches from `codes/patches/` and an in-tree `build_isobars.py` copied over the
+clone; the fork branches reproduce those trees exactly, and
+`campaigns/zr96-c2/components.lock.yaml` records what that image used.)
 
 Check the framework pin before pushing (it replays the Dockerfile's own git
 sequence):
@@ -196,7 +193,7 @@ freeze-out surface produce none.
 
 For each component you bump:
 
-1. **Pin.** External code → change the SHA in `codes/get_code_packages_test.sh`.
+1. **Pin.** External code → commit to its fork's `QGP-USP` branch and change the SHA in `codes/get_code_packages.sh`.
    Framework → change the SHA in `docker/Dockerfile` (in the commit *after* the
    one you want; the pin cannot name its own commit).
 2. **Verify the pin.** `scripts/check_docker_pin.sh` (full 40-char SHA, differs

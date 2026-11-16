@@ -2,7 +2,7 @@
 """Write the software lock of a campaign: every revision that went into its image.
 
 A container image is built by one commit's docker/Dockerfile, which fetches the
-framework at a pinned commit, whose codes/get_code_packages_test.sh in turn
+framework at a pinned commit, whose codes/get_code_packages.sh in turn
 clones every physics code at a pinned commit and applies the patches in
 codes/patches/.  This script walks that chain *in git* (nothing is built or
 downloaded) and writes it down as one YAML file, so a campaign record can say

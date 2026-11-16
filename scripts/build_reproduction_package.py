@@ -591,7 +591,7 @@ parametrisation, seeds).  The JSON is what those resolve to.
 ## Why the md5 and not a build recipe is the identity
 
 The Dockerfile pins the *framework* to `{{framework_pin}}`, and the framework's
-`codes/get_code_packages_test.sh` clones every physics package at a pinned
+`codes/get_code_packages.sh` clones every physics package at a pinned
 commit (iSS at `d242555306930f813881caca500f0e6f82036b2e` plus
 `codes/patches/iSS_PTB_deltaf.patch`, which is what makes `deltaf_model 1` =
 PTB possible at all); the full list is `components.lock.yaml` in the campaign

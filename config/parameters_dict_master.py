@@ -672,7 +672,7 @@ iss_dict = {
     # MC_sampling 4 sampler clamps 1 + delta f to [0, 2] instead)
     'deltaf_model': 0,  # 0: linear delta f of bulk_deltaf_kind (20: 22-moment,
     # 21: Chapman-Enskog); 1: PTB modified equilibrium, positive definite,
-    # needs bulk_deltaf_kind 21 (iSS patch codes/patches/iSS_PTB_deltaf.patch)
+    # needs bulk_deltaf_kind 21 (iSS branch QGP-USP of IFUSP-Heavy-Ions/iSS)
     'ptb_min_eigenvalue': 0.1,  # PTB regulator: smallest allowed eigenvalue
     # of the momentum transformation over (1 + lambda_Pi)
     'quantum_statistics': 1,  # include quantum statistics (1: yes, 0: no)

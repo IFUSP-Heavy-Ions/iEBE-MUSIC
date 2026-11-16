@@ -14,7 +14,7 @@ control_dict = {
     # seeds; results in spvn_results_<id>/deltaf_<name>.  Grad22 and CE are the
     # linear 22-moment and Chapman-Enskog delta f (clamped to [-1, 1] by the
     # sampler); PTB is the positive-definite modified equilibrium
-    # (codes/patches/iSS_PTB_deltaf.patch).
+    # (branch QGP-USP of IFUSP-Heavy-Ions/iSS).
     'deltaf_models': {
         'Grad22': {'deltaf_model': 0, 'bulk_deltaf_kind': 20},
         'CE': {'deltaf_model': 0, 'bulk_deltaf_kind': 21},

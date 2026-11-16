@@ -58,10 +58,8 @@ ENV HOME /opt/
 # docker/Dockerfile for the rationale and for the bump procedure. The SHA must be
 # kept in sync with docker/Dockerfile.
 #
-# NOTE: this variant previously used ./get_code_packages.sh (the developer script,
-# which clones unpinned branches) while the el9 variant used the pinned
-# get_code_packages_test.sh. That meant the two images could build different code
-# from the same commit. It now uses the pinned script, matching docker/Dockerfile.
+# codes/get_code_packages.sh clones every code at a pinned commit, so this
+# variant and docker/Dockerfile build the same sources from the same pin.
 RUN cd ${HOME} \
 && mkdir iEBE-MUSIC && cd iEBE-MUSIC \
 && git init -q . \
@@ -70,7 +68,7 @@ RUN cd ${HOME} \
 && git checkout -q FETCH_HEAD \
 && test "$(git rev-parse HEAD)" = "4723b7e514a3c98c96c3d614c6fcfcf79a2ccbf8" \
 && cd codes \
-&& bash ./get_code_packages_test.sh \
+&& bash ./get_code_packages.sh \
 && ./compile_code_packages.sh \
 && cd ../EOS_database \
 && bash download_EOSdatabase1D.sh \
