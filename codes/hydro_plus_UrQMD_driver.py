@@ -734,6 +734,48 @@ def write_trento_event_summary(trento_results_folder,
                        seed_add)
 
 
+# Importance sampling.  When IEBE_EVENT_LIST names a file, this job does not
+# run the event ids hydro_id0 .. hydro_id0 + n_hydro - 1 but the events at
+# those *positions* of the list: the ones phase 1 selected
+# (scripts/draw_events.py, scripts/select_events.py), each with the weight
+# that makes weighted averages over them unbiased.  Keyed by event id.
+EVENT_SELECTION = {}
+
+
+def load_event_list(list_path):
+    """Read the list of selected events; return it in file order.
+
+    CSV with a header and at least the columns event_id and weight; p_acc,
+    centrality and estimator are carried along when present.
+    """
+    events = []
+    with open(list_path, "r", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            row["event_id"] = int(row["event_id"])
+            events.append(row)
+            EVENT_SELECTION[row["event_id"]] = row
+    return events
+
+
+def selection_check(event_id, mult):
+    """Compare this event's multiplicity with the one it was selected on.
+
+    The weight was fixed in phase 1 and stays valid whatever this says; a
+    mismatch means this machine produced a different initial condition for the
+    same event id than the machine that drew it.
+    """
+    row = EVENT_SELECTION.get(int(event_id))
+    if row is None or not row.get("estimator") or mult is None:
+        return ""
+    expected = float(row["estimator"])
+    if abs(mult - expected) <= 1e-8 * max(abs(expected), 1.0):
+        return "match"
+    print("\U000026A0  event {}: multiplicity {:.10g} differs from the {:.10g} "
+          "it was selected on".format(event_id, mult, expected),
+          flush=True)
+    return "MISMATCH"
+
+
 def record_drawn_event(final_results_folder,
                        event_id,
                        impact_parameter,
@@ -763,6 +805,9 @@ def record_drawn_event(final_results_folder,
     columns = [
         "event_id", "b", "b_max", "b_over_bmax", "mult", "status", "seed_add"
     ]
+    selected = EVENT_SELECTION.get(int(event_id))
+    if selected is not None:
+        columns += ["weight", "p_acc", "centrality", "selection_check"]
     rows = {}
     try:
         with open(csv_path, "r", encoding="utf-8") as f:
@@ -803,6 +848,13 @@ def record_drawn_event(final_results_folder,
         "seed_add":
             "" if seed_add is None else int(seed_add),
     }
+    if selected is not None:
+        rows[int(event_id)].update({
+            "weight": selected.get("weight", ""),
+            "p_acc": selected.get("p_acc", ""),
+            "centrality": selected.get("centrality", ""),
+            "selection_check": selection_check(event_id, mult),
+        })
 
     tmp_path = csv_path + ".tmp"
     with open(tmp_path, "w", encoding="utf-8") as f:
@@ -1688,6 +1740,16 @@ def zip_results_into_hdf5(final_results_folder, event_id, para_dict,
             gtemp.attrs.create("toolkit_pT_min", grid[0])
             gtemp.attrs.create("toolkit_pT_max", grid[1])
             gtemp.attrs.create("toolkit_npT", grid[2])
+        selected = EVENT_SELECTION.get(int(event_id)) if str(
+            event_id).isdigit() else None
+        if selected is not None:
+            # importance sampling: <O> = sum(w O)/sum(w) over the events of a
+            # design point.  Absent means 1 (every event was simulated).
+            gtemp.attrs.create("event_weight", float(selected["weight"]))
+            for key in ("p_acc", "centrality"):
+                if selected.get(key):
+                    gtemp.attrs.create("selection_" + key,
+                                       float(selected[key]))
         if deltaf_models:
             gtemp.attrs.create(
                 "deltaf_models",
@@ -1784,12 +1846,23 @@ def main(para_dict_):
 
     idx0 = para_dict_['hydro_id0']
     nev = para_dict_['n_hydro']
+    # By default this job owns the event ids idx0 .. idx0 + nev - 1.  With an
+    # event list it owns the same *positions* of the list instead.
+    event_ids = list(range(idx0, idx0 + nev))
+    event_list_file = os.environ.get("IEBE_EVENT_LIST")
+    if event_list_file:
+        selected_events = load_event_list(event_list_file)
+        event_ids = [e["event_id"] for e in selected_events[idx0:idx0 + nev]]
+        print("\U0001F3AF  event list {}: positions {}-{} of {} -> {} events".
+              format(event_list_file, idx0, idx0 + nev - 1,
+                     len(selected_events), len(event_ids)),
+              flush=True)
     exitErrorTrigger = False
     exitErrorTriggerInitial = False
-    for iev in range(nev):
+    for iev, global_event_id in enumerate(event_ids):
         curr_time = time.asctime()
 
-        event_id = str(iev + idx0)
+        event_id = str(global_event_id)
         if (para_dict_['initial_condition'] != "self"
                 and para_dict_['initial_condition'] != "fixCentrality"):
             initial_database_name = (
@@ -1834,7 +1907,8 @@ def main(para_dict_):
               flush=True)
 
         initStauts, ifile = get_initial_condition(initial_condition,
-                                                  initial_type, iev, idx0 + iev,
+                                                  initial_type, iev,
+                                                  global_event_id,
                                                   para_dict_['seed_add'],
                                                   final_results_folder,
                                                   para_dict_)

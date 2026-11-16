@@ -210,6 +210,8 @@ Requirements = TARGET.HasSingularity && StringListIMember("stash", HasFileTransf
         input_files.append(para_dict_['bayes_file'])
     if seed_file:
         input_files.append(transfer_seed_file)
+    if para_dict_.get("event_list"):
+        input_files.append(para_dict_["event_list"])
     script.write("\ntransfer_input_files = {}\n".format(
         ", ".join(input_files)))
 
@@ -295,6 +297,18 @@ seed=$5
 # design point is the identical event (seed_add is a campaign constant).
 eventOffset=${6:-0}
 output_mode="__OUTPUT_MODE__"
+# Importance sampling: when the submit file ships the list of selected events
+# (scripts/select_events.py), the event range below addresses *positions* of
+# that list, and the driver simulates the events found there with their
+# weights.  Without a list the range is a range of event ids, as always.
+event_list="__EVENT_LIST__"
+if [ -n "${event_list}" ]; then
+    if [ ! -f "${event_list}" ]; then
+        echo "event list ${event_list} was not transferred" >&2
+        exit 1
+    fi
+    export IEBE_EVENT_LIST="$(pwd)/${event_list}"
+fi
 
 export PYTHONIOENCODING=utf-8
 export PATH="${PATH}:/usr/lib64/openmpi/bin:/usr/local/gsl/2.5/x86_64/bin"
@@ -336,7 +350,9 @@ printf "Job running as user: `/usr/bin/id`\\n"
 printf "Working directory: ${SCRATCH_DIR}\\n"
 
 """.replace("__NURQMD_SAMPLES__", str(para_dict_["n_urqmd_per_hydro"])
-              ).replace("__OUTPUT_MODE__", para_dict_.get("output_mode", "quiet")))
+              ).replace("__OUTPUT_MODE__", para_dict_.get("output_mode", "quiet")
+              ).replace("__EVENT_LIST__",
+                        path.basename(para_dict_.get("event_list") or "")))
     if seed_file:
         script.write("""
 seedfile="${7:-}"
@@ -836,6 +852,12 @@ if __name__ == "__main__":
                         'processed sequentially into the same working '
                         'directory, so this has to cover the whole batch, not '
                         'one event.')
+    parser.add_argument('-event_list', '--event_list', metavar='', type=str,
+                        default='',
+                        help='importance sampling: CSV of selected events '
+                        '(scripts/select_events.py). Jobs then own positions '
+                        'of this list, n_events_per_job each, instead of a '
+                        'range of event ids. UrQMD/decay branch only.')
     parser.add_argument('-output_mode', '--output_mode', metavar='', type=str,
                         default='quiet', choices=['quiet', 'verbose'],
                         help='output transfer mode: quiet=spvn only, verbose=full EVENT_RESULTS')

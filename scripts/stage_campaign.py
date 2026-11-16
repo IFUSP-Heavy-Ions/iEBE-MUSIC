@@ -68,6 +68,11 @@ def main():
                     help="comma-separated event offsets, one per batch (default 0)")
     ap.add_argument("--jobid-template", required=True,
                     help="e.g. 'zr96_b{batch}_dp{dp}'")
+    ap.add_argument("--selection-dir",
+                    help="importance sampling: directory holding "
+                    "selection_dp<NNNN>.csv from scripts/select_events.py. Each "
+                    "design point then gets as many jobs as its list needs, "
+                    "and jobs own positions of the list instead of event ids")
     ap.add_argument("--image", required=True)
     ap.add_argument("--apbase", required=True, help="AP output root (<apbase>/<dp>)")
     ap.add_argument("--aphome", required=True, help="AP staging root on the home disk")
@@ -110,14 +115,32 @@ def main():
             #   'ge76_dp{dp}'      -> ge76_dp1461
             #   'zr96_b{batch}_dp{dp}' -> zr96_b2_dp0421
             jobid = args.jobid_template.format(batch=batch_index, dp="%04d" % dp)
+            n_jobs, event_list = args.n_jobs, None
+            if args.selection_dir:
+                event_list = os.path.join(args.selection_dir,
+                                          "selection_dp%04d.csv" % dp)
+                if not os.path.isfile(event_list):
+                    print("MISSING_SELECTION %d" % dp, file=sys.stderr)
+                    continue
+                with open(event_list) as f:
+                    n_selected = sum(1 for _ in f) - 1
+                # positions [offset, offset + n_jobs*n_events) of the list
+                n_jobs = max(0, -(-(n_selected - offset) // args.n_events))
+                n_jobs = min(n_jobs, args.n_jobs) if args.n_jobs else n_jobs
+                if n_jobs == 0:
+                    continue
+                os.makedirs(os.path.join(out, "selections"), exist_ok=True)
+                shutil.copy2(event_list, os.path.join(out, "selections"))
             cmd = [
                 sys.executable, GENERATOR,
                 "-param", dict_src,
                 "-singularity", args.image,
-                "-n", str(args.n_jobs), "-nev", str(args.n_events),
+                "-n", str(n_jobs), "-nev", str(args.n_events),
                 "-nth", "1", "-mem", args.mem, "-disk", args.disk,
                 "-event_start_id", str(offset), "-jobid", jobid,
             ]
+            if event_list:
+                cmd += ["-event_list", os.path.abspath(event_list)]
             r = subprocess.run(cmd, cwd=odir, stdout=subprocess.DEVNULL,
                                stderr=subprocess.DEVNULL)
             if r.returncode != 0:
@@ -134,6 +157,9 @@ def main():
                 elif line.startswith("transfer_input_files ="):
                     line = ("transfer_input_files = %s/dicts/%s" %
                             (args.aphome, os.path.basename(dict_src)))
+                    if event_list:
+                        line += ", %s/selections/%s" % (
+                            args.aphome, os.path.basename(event_list))
                 elif line.startswith("initialdir ="):
                     line = "initialdir = %s/dp%04d" % (args.apbase, dp)
                 elif line.startswith(("output =", "error =", "log =")):
