@@ -7,7 +7,7 @@ and nothing is stored that can be regenerated exactly.
 
 | campaign | system | design points | framework revision | image |
 |---|---|---|---|---|
-| [`zr96-c2`](zr96-c2/) | A = 96 isobars, 200 GeV | 1–1000, 2001–2360 | `17ae5b4` (tag `campaign/zr96-c2`) | `iebe-music_slim_17ae5b4_f5242628.sif` |
+| [`zr96-c2`](zr96-c2/) | A = 96 isobars, 200 GeV | 1–1000, 2001–2360 | `17ae5b4` (tag `campaign/zr96-c2`) | `iebe-music_slim_17ae5b4_f5242628.sif`, [doi:10.5281/zenodo.24293947](https://doi.org/10.5281/zenodo.24293947) |
 
 Campaigns run before `zr96-c2` are not recorded: they passed only the energy
 density to hydro and are superseded.

@@ -19,7 +19,7 @@ image:
   # cannot pin the commit that contains it); it copies nothing from its context.
   recipe: git show 06cc5040c3ed34f90b9bc69ee6fbb9fe15e6037e:docker/Dockerfile | docker build --build-arg WITH_OPTIONAL_CODES=0 -
   sources: components.lock.yaml
-  public_copy: null        # to be archived (Zenodo)
+  public_copy: https://doi.org/10.5281/zenodo.24293947
   fetched_by_jobs_as: osdf:///ospool/ap40/data/matthew.luzum/iebe-music_slim_17ae5b4_f5242628.sif
   # A rebuild compiles the same sources but is not byte-identical unless the
   # toolchain matches, because the Dockerfile's yum install is not versioned.
