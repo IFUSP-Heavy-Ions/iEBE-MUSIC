@@ -1,7 +1,7 @@
 # Base image pinned by digest (see docker/Dockerfile for the rationale).
 FROM ubuntu:22.04@sha256:5ec03bb3441e8b0bf3b4f9cd4629a1ae763010dc3035bb8da3ae6cf026486401
 
-LABEL org.opencontainers.image.source="https://github.com/mluzum/iEBE-MUSIC"
+LABEL org.opencontainers.image.source="https://github.com/IFUSP-Heavy-Ions/iEBE-MUSIC"
 
 RUN export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true && \
     apt-get update && apt-get install -y --no-install-recommends \
@@ -63,10 +63,10 @@ ENV HOME /opt/
 RUN cd ${HOME} \
 && mkdir iEBE-MUSIC && cd iEBE-MUSIC \
 && git init -q . \
-&& git remote add origin https://github.com/mluzum/iEBE-MUSIC.git \
-&& git fetch -q --depth=1 origin 4723b7e514a3c98c96c3d614c6fcfcf79a2ccbf8 \
+&& git remote add origin https://github.com/IFUSP-Heavy-Ions/iEBE-MUSIC.git \
+&& git fetch -q --depth=1 origin e6555196f8bc0ca80edd0f0d76d3186a600ff42a \
 && git checkout -q FETCH_HEAD \
-&& test "$(git rev-parse HEAD)" = "4723b7e514a3c98c96c3d614c6fcfcf79a2ccbf8" \
+&& test "$(git rev-parse HEAD)" = "e6555196f8bc0ca80edd0f0d76d3186a600ff42a" \
 && cd codes \
 && bash ./get_code_packages.sh \
 && ./compile_code_packages.sh \

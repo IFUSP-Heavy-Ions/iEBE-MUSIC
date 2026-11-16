@@ -2,7 +2,7 @@
 # change the toolchain underneath an otherwise identical commit.
 FROM opensciencegrid/software-base:23-el9-release@sha256:7d9289e11856257d011e6542557cc78e4ec11d5d421e8a68629655afb61b0e52
 
-LABEL org.opencontainers.image.source="https://github.com/mluzum/iEBE-MUSIC"
+LABEL org.opencontainers.image.source="https://github.com/IFUSP-Heavy-Ions/iEBE-MUSIC"
 
 RUN yum -y install \
         cmake \
@@ -89,13 +89,19 @@ ENV HOME /opt/
 #              PTB delta f patch for iSS and one particlization per delta f model
 #              (Grad22, CE, PTB), toolkit pT grid 0-5 GeV in 0.05 GeV bins; see
 #              CAMPAIGN2_HANDOFF.md)
+#   e655519 = "Fetch every modified component from its fork; one pinned bootstrap"
+#             (same sources as 17ae5b4, verified tree by tree; the patches and the
+#              in-tree sampler are now commits on the QGP-USP branches of the
+#              forks, and the framework is fetched from the group organization.
+#              Earlier pins on this list were fetched from github.com/mluzum/iEBE-MUSIC,
+#              where they remain.)
 RUN cd ${HOME} && \
     mkdir iEBE-MUSIC && cd iEBE-MUSIC && \
     git init -q . && \
-    git remote add origin https://github.com/mluzum/iEBE-MUSIC.git && \
-    git fetch -q --depth=1 origin 17ae5b49c083a33783f72ed5d00b8822973a2d70 && \
+    git remote add origin https://github.com/IFUSP-Heavy-Ions/iEBE-MUSIC.git && \
+    git fetch -q --depth=1 origin e6555196f8bc0ca80edd0f0d76d3186a600ff42a && \
     git checkout -q FETCH_HEAD && \
-    test "$(git rev-parse HEAD)" = "17ae5b49c083a33783f72ed5d00b8822973a2d70" && \
+    test "$(git rev-parse HEAD)" = "e6555196f8bc0ca80edd0f0d76d3186a600ff42a" && \
     cd codes && \
     bash get_code_packages.sh && \
     ./compile_code_packages.sh && \

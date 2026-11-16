@@ -40,8 +40,9 @@ Three layers, all immutable by construction:
    (`opensciencegrid/software-base:23-el9-release@sha256:...`). Tags are mutable,
    digests are not.
 2. **The framework** — the Dockerfile does `git fetch origin <full-40-char-SHA>`
-   from `github.com/mluzum/iEBE-MUSIC`. Currently
-   `17ae5b49c083a33783f72ed5d00b8822973a2d70`. It cannot name its own commit, so
+   from `github.com/IFUSP-Heavy-Ions/iEBE-MUSIC` (pins up to and including
+   campaign zr96-c2's `17ae5b4` were fetched from `github.com/mluzum/iEBE-MUSIC`,
+   where they remain). The current pin is in `docker/Dockerfile`. It cannot name its own commit, so
    it always points one commit back: bump it in the commit *after* the one you
    want.
 3. **Every external code** — `codes/get_code_packages.sh`, one

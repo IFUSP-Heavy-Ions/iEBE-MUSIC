@@ -7,13 +7,13 @@ name: CI to Docker Hub
 
 on:
   push:
-    # NME is the emulator-sweep branch; without it here, pushes to it build nothing
-    # and the image referenced by the OSG/HTCondor generators cannot be refreshed.
-    branches: [ main, dev, NME ]
+    # QGP-USP is the group's working branch; NME was the emulator-sweep branch it
+    # grew out of.
+    branches: [ main, dev, NME, QGP-USP ]
     # Publish semver tags as releases.
     tags: [ 'v*.*.*' ]
   pull_request:
-    branches: [ main, dev, NME ]
+    branches: [ main, dev, NME, QGP-USP ]
 
 env:
   # Use docker.io for Docker Hub if empty
