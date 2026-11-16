@@ -136,3 +136,11 @@ collect_events_singularity.sh
 #       --number-configs N --number-nucleons A --seed 8675309
 shared_seeds/
 nucleon-seeds*.hdf
+
+# Parameter dictionaries are generated from a design file by MakeDictionaries.py
+# and regenerate byte-identically, so they are not tracked.  A campaign record
+# (campaigns/<name>/campaign.yaml) names the design file and a digest of the
+# dictionaries it produces.
+/DesignPoint*/
+/zr96_design*/
+/ge76_design*/
