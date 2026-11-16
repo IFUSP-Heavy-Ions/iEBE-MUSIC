@@ -7,8 +7,9 @@ and what every parameter was set to.  Those are four independent things:
 
   * the *container* carries the physics (framework at a pinned commit, iSS with
     the PTB patch, MUSIC, TRENTo, the toolkit).  Its identity is the SIF md5
-    plus the md5 of each built binary, because the code packages are cloned
-    from moving branches and a rebuild is not byte-reproducible;
+    plus the md5 of each built binary: every code package is cloned at a
+    pinned commit (campaigns/<name>/components.lock.yaml), but the system
+    packages are not pinned, so a rebuild is not byte-reproducible;
   * the *framework revision* is what generates and runs the job folders;
   * the *design* is a 2000-point Latin hypercube drawn from a seed in the unit
     cube and mapped through per-axis priors -- so it can be regenerated, not
@@ -589,13 +590,15 @@ parametrisation, seeds).  The JSON is what those resolve to.
 
 ## Why the md5 and not a build recipe is the identity
 
-The Dockerfile pins the *framework* to `{{framework_pin}}`, but the physics
-packages are cloned inside the build: iSS is checked out at
-`d242555306930f813881caca500f0e6f82036b2e` and then patched
-(`codes/patches/iSS_PTB_deltaf.patch`, which is what makes `deltaf_model 1` =
-PTB possible at all), while MUSIC, TRENTo, the hadronic afterburner toolkit and
-the UrQMD afterburner follow moving branches.  A rebuild today therefore
-resolves them differently.
+The Dockerfile pins the *framework* to `{{framework_pin}}`, and the framework's
+`codes/get_code_packages_test.sh` clones every physics package at a pinned
+commit (iSS at `d242555306930f813881caca500f0e6f82036b2e` plus
+`codes/patches/iSS_PTB_deltaf.patch`, which is what makes `deltaf_model 1` =
+PTB possible at all); the full list is `components.lock.yaml` in the campaign
+record.  So the *sources* are fixed by the framework revision.  What is not
+fixed is the toolchain: the base image is pinned by digest, but `yum install`
+takes whatever compiler and libraries its repositories serve on the day of the
+build, so a rebuild compiles the same sources into different bytes.
 
 So the reproducible statement is the *artifact*: the md5 of the SIF, and the
 md5 of each binary inside it.

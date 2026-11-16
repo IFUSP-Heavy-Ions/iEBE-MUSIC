@@ -1,0 +1,48 @@
+universe = vanilla
+executable = /home/matthew.luzum/zr96c2_stage/run/run_singularity.sh
+arguments = parameter_dictionary_design_point_1.py $(Process) 20 1 0 0
+
+JobBatchName = iEBEMUSIC_zr96c2_b1_dp0001
+
+should_transfer_files = YES
+WhenToTransferOutput = ON_EXIT
+
+container_image = osdf:///ospool/ap40/data/matthew.luzum/iebe-music_slim_17ae5b4_f5242628.sif
+Requirements = TARGET.HasSingularity && StringListIMember("stash", HasFileTransferPluginMethods)
+
+transfer_input_files = /home/matthew.luzum/zr96c2_stage/dicts/parameter_dictionary_design_point_1.py
+
+transfer_output_files = spvn_results_$(Process).tar.gz
+
+error = /home/matthew.luzum/log/job.$(Cluster).$(Process).error
+output = /home/matthew.luzum/log/job.$(Cluster).$(Process).output
+log = /home/matthew.luzum/log/job.$(Cluster).$(Process).log
+
+#+JobDurationCategory = "Long"
+max_idle = 1000
+
+# Exit code 73 only means "at least one event was skipped" (an empty freeze-out
+# surface), NOT "this job's output is junk".  Removing such jobs here races the
+# output transfer: when the remove wins, all 20 events vanish silently and the
+# job leaves the queue with no results and no HoldReason.  That cost ~2% of the
+# first production batch and had to be found by comparing h5 files against
+# events_drawn.csv.  Let the job finish and transfer; per-event gaps are visible
+# as drawn-but-missing h5 files and are re-run individually.
+
+# auto release hold jobs if they are caused by data transfer issues on OSG
+periodic_release = ((HoldReasonCode == 13 || HoldReasonCode == 26) && (time() - EnteredCurrentStatus) > 1200 )
+
+checkpoint_exit_code = 85
+
+# Send the job to Held state on failure.
+on_exit_hold = (ExitBySignal == True) || (ExitCode != 0 && ExitCode != 73)
+
+# The below are good base requirements for first testing jobs on OSG,
+# if you don't have a good idea of memory and disk usage.
+request_cpus = 1
+request_memory = 1 GB
+request_disk = 4 GB
+
+# Queue one job with the above specifications.
+initialdir = /home/matthew.luzum/zr96c2_prod/dp0001
+queue 100

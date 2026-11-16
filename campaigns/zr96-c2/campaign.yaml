@@ -1,0 +1,96 @@
+# Campaign record.  campaigns/README.md explains the fields and how to use them.
+name: zr96-c2
+title: "A = 96 isobars (96Zr/96Ru) at 200 GeV: full free-streaming T^munu into hydro, three delta f models"
+status: running          # batch 2 and the extension were still being collected on 2026-11-16
+physics_notes: ../../CAMPAIGN2_HANDOFF.md
+
+# --- code ------------------------------------------------------------------
+framework:
+  # The revision inside the image.  It fixes every source that was compiled:
+  # see components.lock.yaml.  Tagged campaign/zr96-c2.
+  repository: https://github.com/mluzum/iEBE-MUSIC
+  commit: 17ae5b49c083a33783f72ed5d00b8822973a2d70
+
+image:
+  file: iebe-music_slim_17ae5b4_f5242628.sif
+  md5: f52426284ebb281b813f21d931bd847a
+  bytes: 515575808
+  # The Dockerfile that pins framework.commit is one commit later (a Dockerfile
+  # cannot pin the commit that contains it); it copies nothing from its context.
+  recipe: git show 06cc5040c3ed34f90b9bc69ee6fbb9fe15e6037e:docker/Dockerfile | docker build --build-arg WITH_OPTIONAL_CODES=0 -
+  sources: components.lock.yaml
+  public_copy: null        # to be archived (Zenodo)
+  fetched_by_jobs_as: osdf:///ospool/ap40/data/matthew.luzum/iebe-music_slim_17ae5b4_f5242628.sif
+  # A rebuild compiles the same sources but is not byte-identical unless the
+  # toolchain matches, because the Dockerfile's yum install is not versioned.
+  # These are the versions in the image and the md5 of what they produced.
+  toolchain:
+    gcc / gcc-c++ / gcc-gfortran: 11.5.0-14.el9.alma.1
+    glibc: 2.34-283.el9_8
+    gsl: 2.6-7.el9
+    hdf5: 1.12.1-7.el9.1
+    fftw: 3.3.8-12.el9
+    python3: 3.9.25-7.el9_8.3
+  binaries_md5:              # paths under /opt/iEBE-MUSIC in the image
+    codes/MUSIC_code/MUSIChydro: f23660abf174cd8677bc8f14b7fbf40f
+    codes/iSS_code/iSS.e: bacdd6d6c3b7901875e33a2b8fb798a7
+    codes/hadronic_afterburner_toolkit_code/hadronic_afterburner_tools.e: 3080be19e6f7033821c16aa8c226cea3
+    codes/hydro_plus_UrQMD_driver.py: 2b703c0ef0a7f0baa4945cb4f6cdad6b
+
+# --- inputs ----------------------------------------------------------------
+design:
+  file: design_lhs2360_A96_c2_ext.csv
+  sha256: 38ab1e38e58ea0daf8b254595de71bb37ec0f16f7effaae3acd30228b0766b31
+  design_points_run: [[1, 1000], [2001, 2360]]     # row N of the file is design point N
+  # Rows 1-2000 are the Latin hypercube and are byte-identical to
+  # design/design_lhs2000_A96_c2.csv, which regenerates from a seed:
+  regenerate_rows_1_2000:
+    - python3 scripts/make_design_a96.py --n 2000 --seed 8675309 --out design/design_lhs2000_A96.csv
+    - python3 scripts/remap_design_prior.py --prior a96 --range normalization=6,13 design/design_lhs2000_A96.csv design/design_lhs2000_A96_c2.csv
+  # Rows 2001-2360 are the extension of 2026-11-02 (180 pairs); they exist
+  # only in this file.
+
+dictionaries:
+  # One parameter dictionary per design point.  Not stored: they regenerate
+  # byte-identically from the design file (all 1360 verified on 2026-11-16
+  # against the files the jobs received, with MakeDictionaries.py at 09fab60).
+  count: 1360
+  regenerate:
+    - python3 MakeDictionaries.py --design campaigns/zr96-c2/design_lhs2360_A96_c2_ext.csv --start-design-point 1 --end-design-point 1000 --output-dir zr96_design_c2
+    - python3 MakeDictionaries.py --design campaigns/zr96-c2/design_lhs2360_A96_c2_ext.csv --start-design-point 2001 --end-design-point 2360 --output-dir zr96_design_c2
+  # (cd zr96_design_c2 && LC_ALL=C find . -name '*.py' | LC_ALL=C sort | xargs sha256sum | sha256sum)
+  digest: 75b702e1d20d6abb3ef0c81646582fef743aec8aa95340d1148b57f89a72160a
+
+# --- events ----------------------------------------------------------------
+events:
+  # An event is (master_seed, seed_add, event_id, iev); the same event_id is
+  # the same pair of nuclei at every design point.
+  master_seed: 8675309
+  seed_add: 0
+  event_id: "batch offset + job index * 20 + iev"
+  trento_seed: "event_id + 1"
+  nucleon_pool_address: "(2g)K and (2g+1)K mod 2**32, K = 2654435761; numpy Philox(key=master_seed, counter=address * 2**24)"
+  freeze_out_seed: "numpy default_rng([seed_add, event_id, iev])"
+  delta_f_models: [Grad22, CE, PTB]    # one particlization each, same surface and seeds
+  events_per_job: 20
+  jobs_per_batch: 100
+  threads: 1
+  batches:
+    - {batch: 1, event_ids: [0, 1999], archive: "spvn_results_<proc>.tar.gz"}
+    - {batch: 2, event_ids: [2000, 3999], archive: "spvn_results_e2000_<proc>.tar.gz"}
+
+# --- execution -------------------------------------------------------------
+execution:
+  platform: OSG (OSPool) via HTCondor; 1 core, 1 GB memory, 4 GB disk per job
+  submit_file: singularity.submit    # as submitted: design point 1, batch 1
+  wrapper: run_singularity.sh        # as run on the worker
+  stage: >
+    python3 scripts/stage_campaign.py --dict-dir zr96_design_c2 --dps 1-1000
+    --offsets 0,2000 --jobid-template 'zr96c2_b{batch}_dp{dp}' --image <sif>
+    --apbase <output> --aphome <staging> --disk 4 --out <staging>
+
+# --- results ---------------------------------------------------------------
+results:
+  format: one HDF5 per design point, one group per event id, one subgroup per delta f model
+  local: /data/mluzum/zr96c2_results/merged/<dp>/<dp>.h5
+  public_copy: null
