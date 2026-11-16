@@ -13,7 +13,12 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: this job compiles on the runner's own toolchain,
+    # and "latest" moved to Ubuntu 26.04 (GCC 15, CMake 4.4, Boost 1.90) in
+    # November 2026, which broke the TRENTo build on an unchanged tree.  The
+    # container build (docker-publish.yml) is the test of what campaigns run;
+    # this one only says the chain still compiles on a stock Ubuntu LTS.
+    runs-on: ubuntu-24.04
     steps:
       - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
       - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
