@@ -119,9 +119,14 @@ def main():
     w("  dockerfile_sha256: {}\n".format(
         sha256_at(df_commit, "docker/Dockerfile")))
     w("  base_image: {}\n".format(base))
-    w("  # yum packages are NOT pinned by the recipe: a rebuild takes whatever\n"
-      "  # the base image's repositories serve that day.  The image file (md5 in\n"
-      "  # campaign.yaml) is therefore the only exact artefact.\n")
+    snapshot = re.search(r"vault\.almalinux\.org/([0-9.]+)/", dockerfile)
+    if snapshot:
+        w("  system_packages: frozen snapshot (AlmaLinux {0} vault, EPEL {0} archive)\n"
+          .format(snapshot.group(1)))
+    else:
+        w("  # yum packages are NOT pinned by the recipe: a rebuild takes whatever\n"
+          "  # the base image's repositories serve that day.  The image file (md5 in\n"
+          "  # campaign.yaml) is therefore the only exact artefact.\n")
     w("  python_packages:\n")
     for name, version in pip:
         w("    {}: \"{}\"\n".format(name, version))

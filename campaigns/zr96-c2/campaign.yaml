@@ -50,6 +50,11 @@ image:
   # still the same code in effect, with the same data tables.  That is evidence for one date and one
   # toolchain step, not a guarantee: keep the image.
   rebuild_check: {date: 2026-11-16, binaries_identical: false, reference_events_bit_identical: true}
+  # With system packages installed from the frozen AlmaLinux 9.8 snapshot
+  # instead (the Dockerfile from 2026-11-16 on), the same sources compile to
+  # byte-identical iSS, toolkit and TRENTo binaries; MUSIChydro differs only in
+  # the framework commit hash it embeds (and the build id derived from it).
+  rebuild_with_pinned_packages: {date: 2026-11-16, binaries_identical: true}
 
 # --- inputs ----------------------------------------------------------------
 design:

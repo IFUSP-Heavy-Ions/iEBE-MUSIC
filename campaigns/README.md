@@ -37,12 +37,13 @@ image (md5)
 ```
 
 The framework commit therefore fixes every source in the image, and
-`components.lock.yaml` spells the list out. What it does not fix is the
-compiler: the Dockerfile's `yum install` is not versioned, so a later rebuild
-may compile the same sources with a newer toolchain. That is why the manifest
-also records the toolchain versions and the md5 of each built binary — a
-rebuild that reproduces those hashes is the same code in every sense — and why
-the image file itself is archived as the fallback.
+`components.lock.yaml` spells the list out. Since November 2026 the Dockerfile
+also installs system packages from a frozen OS snapshot, so the compiler is
+fixed too and a rebuild produces the same binaries. The zr96-c2 image predates
+that: its recipe took whatever the repositories served that day. That is why
+its manifest records the toolchain versions and the md5 of each built binary —
+a rebuild that reproduces those hashes is the same code in every sense — and
+why the image file itself is archived as well.
 
 ## Reproducing a campaign
 

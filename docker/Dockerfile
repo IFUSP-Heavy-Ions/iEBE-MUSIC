@@ -4,7 +4,45 @@ FROM opensciencegrid/software-base:23-el9-release@sha256:7d9289e11856257d011e654
 
 LABEL org.opencontainers.image.source="https://github.com/IFUSP-Heavy-Ions/iEBE-MUSIC"
 
-RUN yum -y install \
+# System packages are pinned too, by installing only from frozen snapshots:
+# the AlmaLinux 9.8 vault and the EPEL 9.8 archive.  Both are final -- nothing
+# is ever added to them -- so this step installs the same compiler and
+# libraries on any date.  Without it `yum install` takes whatever the live
+# repositories serve that day: a rebuild 17 days after the zr96-c2 image picked
+# up a newer gcc and glibc and produced different binaries from identical
+# sources.  9.8 is the release that image was built from (gcc 11.5.0-14).
+#
+# To move to a newer toolchain, change the release in the four URLs -- to one
+# that is already in the vault, i.e. superseded, never the current one, which
+# still receives updates -- and expect every binary to change.
+RUN printf '%s\n' \
+        '[pinned-baseos]' \
+        'name=AlmaLinux 9.8 BaseOS (vault, frozen)' \
+        'baseurl=https://vault.almalinux.org/9.8/BaseOS/$basearch/os/' \
+        'gpgcheck=1' \
+        'gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-AlmaLinux-9' \
+        'enabled=0' \
+        '[pinned-appstream]' \
+        'name=AlmaLinux 9.8 AppStream (vault, frozen)' \
+        'baseurl=https://vault.almalinux.org/9.8/AppStream/$basearch/os/' \
+        'gpgcheck=1' \
+        'gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-AlmaLinux-9' \
+        'enabled=0' \
+        '[pinned-crb]' \
+        'name=AlmaLinux 9.8 CRB (vault, frozen)' \
+        'baseurl=https://vault.almalinux.org/9.8/CRB/$basearch/os/' \
+        'gpgcheck=1' \
+        'gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-AlmaLinux-9' \
+        'enabled=0' \
+        '[pinned-epel]' \
+        'name=EPEL 9.8 (archive, frozen)' \
+        'baseurl=https://dl.fedoraproject.org/pub/archive/epel/9.8/Everything/$basearch/' \
+        'gpgcheck=1' \
+        'gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-9' \
+        'enabled=0' \
+        > /etc/yum.repos.d/pinned.repo
+
+RUN yum -y --disablerepo='*' --enablerepo='pinned-*' install \
         cmake \
         cmake3 \
         git \
