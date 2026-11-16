@@ -2,7 +2,7 @@
 
 Per design point, the A+A inelastic cross section `sigma_inel` that anchors
 centrality percentiles, plus the share of peripheral events that the campaign's
-`b_max` cut removed. Background and the original task: `CROSS_SECTION_HANDOFF.md`.
+`b_max` cut removed. Background and the original task: `docs/notes/CROSS_SECTION_HANDOFF.md`.
 
 ## What is computed
 

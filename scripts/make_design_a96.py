@@ -28,7 +28,7 @@ import make_design as md  # noqa: E402  (latin_hypercube, maximin_order)
 REPO = os.path.dirname(HERE)
 
 # Same 20 axes in the same order as make_design.PRIOR -- required for the
-# unit-cube design to be reused.  Ranges per design/A96_priors.md.
+# unit-cube design to be reused.  Ranges per campaigns/zr96-c2/priors.md.
 PRIOR_A96 = [
     # TRENTo and the initial state
     ("normalization", 3.0, 10.0),          # was 10-20 (200 GeV RHIC)

@@ -1,111 +1,106 @@
-# iEBE-MUSIC
-This is a repository is an overarching numerical framework for event-by-event simulations of relativistic heavy-ion collisions.
+# iEBE-MUSIC — QGP-USP chain
 
-If you have any questions, please email to the iEBE-MUSIC google groups, iebe-music@googlegroups.com
+Event-by-event simulation of relativistic heavy-ion collisions, as run by the
+heavy-ion group at the University of São Paulo. This is a fork of
+[chunshen1987/iEBE-MUSIC](https://github.com/chunshen1987/iEBE-MUSIC): the
+scripts that assemble the stages of the simulation, build them into one
+container, and run it at scale. Branch `QGP-USP` is the group's working branch;
+`main` follows upstream.
 
-## Setup & Ingradients:
-All the code packages can be downloaded from online git repositories. Please use `codes/get_code_packages.sh` to download the code packages and `codes/compile_code_packages.sh` to compile all the packages before event-by-event simulations.
+What this fork adds to upstream is a TRENTo-based chain with deformed nuclei,
+built so that a large design-point sweep is **reproducible** and its points are
+**statistically synchronized** (the same event number is the same pair of
+nuclei at every design point).
 
-Initial conditions:
+## The chain
 
-- [IPGlasma](https://github.com/schenke/ipglasma)
-- [3DMCGlauber](https://github.com/chunshen1987/3dMCGlauber): a 3D Monte-Carlo Glauber model for heavy-ion collisions
+| stage | code | source |
+|---|---|---|
+| nucleon positions (deformed, fluctuating shapes) | Isobar-Sampler | [mluzum/Isobar-Sampler](https://github.com/mluzum/Isobar-Sampler) |
+| initial condition | TRENTo | [IFUSP-Heavy-Ions/trento](https://github.com/IFUSP-Heavy-Ions/trento) |
+| free streaming | `freestream` | PyPI, pinned |
+| viscous hydrodynamics | MUSIC | [IFUSP-Heavy-Ions/MUSIC](https://github.com/IFUSP-Heavy-Ions/MUSIC) |
+| particlization | iSS | [IFUSP-Heavy-Ions/iSS](https://github.com/IFUSP-Heavy-Ions/iSS) |
+| hadronic stage | resonance decays, UrQMD or SMASH | upstream |
+| observables | hadronic_afterburner_toolkit | [IFUSP-Heavy-Ions/hadronic_afterburner_toolkit](https://github.com/IFUSP-Heavy-Ions/hadronic_afterburner_toolkit) |
 
-Pre-equilibrium evolution:
+Each fork carries this chain's changes as ordinary commits on a branch
+`QGP-USP`, and `codes/get_code_packages.sh` fetches every code at a pinned
+commit. The upstream backends (IP-Glasma, 3D MC-Glauber, KoMPoST, photon
+emission) are still fetched and built as in upstream.
 
-- [KoMPoST](https://github.com/KMPST/KoMPoST)
+## Quick start
 
-Hydrodynamics:
-
-- [MUSIC](https://github.com/MUSIC-fluid/MUSIC)
-
-Particlization & hadronic transport:
-
-- [iSS](https://github.com/chunshen1987/iSS) + [UrQMD](https://Chunshen1987@bitbucket.org/Chunshen1987/urqmd_afterburner.git)
-
-## Usage:
-
-type `./generate_jobs.py -h` for help information
-
-### TRENTo + free streaming
-
-The new initial-state chain can be selected with `initial_state_type = "TRENTo"` in `parameters_dict_user_TRENTo.py`.
-It uses a dedicated `free_streaming_dict` for the free-streaming stage and expects the isobar seed file to match the
-target/projectile nucleon count. Both SMASH and UrQMD are supported as hadronic afterburners via the `afterburner_type` key.
-
-For large production runs, use [generate_event_batches.py](generate_event_batches.py) to split a design point into
-multiple non-overlapping event ranges and generate one job folder per range. Then use [submit_job_batches.py](submit_job_batches.py)
-to submit all jobs at once. For example:
+With Docker — builds every code from pinned sources with a pinned toolchain:
 
 ```bash
-# Step 1: Generate 10 job folders (events 0–99, 100–199, ..., 900–999)
-python3 generate_event_batches.py \
-  --event_end_id 999 \
-  --events_per_job 100 \
-  --manifest_file design_point_0.json \
-  --generate_jobs_args '--cluster_name local --par_dict config/parameters_dict_user_TRENTo.py'
-
-# Step 2: Submit all jobs (with dry-run first to verify)
-python3 submit_job_batches.py design_point_0.json --dry-run --log-file submission.log
-
-# Step 3: Run for real
-python3 submit_job_batches.py design_point_0.json --seed 12345 --log-file submission.log
+docker build --build-arg WITH_OPTIONAL_CODES=0 -t iebe-music:slim docker/   # TRENTo + hydro + iSS + decays
+docker build -t iebe-music:full docker/                                    # every backend
 ```
 
-The manifest tracks all event ranges and the submission script can submit hundreds of jobs without manual intervention.
+Or natively (Ubuntu 24.04 is what CI tests; 30–60 min):
 
-Each TRENTo event folder now also archives the sampled isobar nuclei and a `sampling_metadata.json` file containing the
-impact parameter and Euler angles used for that event.
-
-To inspect them quickly, run [utilities/inspect_isobar_nuclei.py](utilities/inspect_isobar_nuclei.py) on a TRENTo
-results folder. It saves a `nucleus_quicklook.png` with nucleon-position projections.
-
-## Parameters:
-Users can pass model parameters through a python script `parameters_dict_user.py`. It contains multiple dictionaries, which are related to each code module inside the iEBE-MUSIC framework. This script will update the master parameters dictionaries in `config/parameters_dict_master.py`. One can read `config/parameters_dict_master.py` for all the available parameters options for each module. If a user want to modify any parameters, he can add it in the `parameters_dict_user.py`.
-
-#### initial_dict
-The `initial_dict` dictionary specify the type of the initial condition to use,
-
-- IPGlasma
-- 3DMCGlauber
-
-For the IPGlasma initial condition, the user needs to specify the HDF5 database filename. 
-
-For the 3DMCGlauber initial condition,
-
-1. If `database_name : "self"`, initial condition will be generated on the fly with the rest part of the simulations.
-
-2. If `database_name : database_file`, the code package will use the pre-generated initial coniditions stored in the database (HDF5).
-
-#### music_dict
-The `music_dict` has all the parameters to run MUSIC for (3+1)D hydrodynamic simulations. 
-
-    'Initial_profile': 9,  for IPGlasma initial condition
-        - 9: IPGlasma (full Tmunu),
-        - 91: e and u^\mu,
-        - 92: e only,
-        - 93: e, u^\mu, and pi^\munu
-    'Initial_profile': 13,  for 3D MCGlauber initial condition
-        - 13: 3D MCGlauber initial condition with dynamical initialization,
-        - 131: 3D MCGlauber initial condition with instantaneous initialization
-
-## Settings on NERSC:
-
-The clusters on NERSC does not use utf-8 as default. To run the script properly, one needs to add the following commands in the ~/.bashrc.ext file,
-
-```
-export PYTHONIOENCODING=utf-8
-export LC_CTYPE=en_US.UTF8
+```bash
+sudo apt-get install build-essential gfortran cmake git wget python3-pip \
+    libfftw3-dev hdf5-tools libhdf5-dev libgsl-dev libeigen3-dev libboost-all-dev
+pip install numpy scipy h5py PyYAML freestream
+cd codes && ./get_code_packages.sh && ./compile_code_packages.sh && cd ..
 ```
 
-## Docker Support
+Run one event:
 
-The iEBE-MUSIC has its official docker image on docker hub [iebe-music](https://hub.docker.com/r/chunshen1987/iebe-music).
+```bash
+python3 generate_jobs.py -w test -n 1 -par config/design_points/parameters_dict_user_TRENTo_dp0.py
+cd test/event_0 && bash submit_job.script       # a few minutes; writes spvn_results_<id>.h5
+```
 
-## Coding Style
+`python3 generate_jobs.py -h` lists the options. Parameters are plain Python
+dictionaries; `config/parameters_dict_master.py` defines every one that exists,
+and a user file overrides a subset.
 
-We use YAPF to impose coding format for the python scripts. Before every commit, please use
+## A design-point sweep
 
-    yapf -i filename.py
+```bash
+python3 scripts/make_design_a96.py --n 2000 --seed 8675309 --out design/my_design.csv
+python3 MakeDictionaries.py --design design/my_design.csv \
+    --start-design-point 1 --end-design-point 250 --output-dir my_dicts
+python3 scripts/stage_campaign.py --dict-dir my_dicts --dps 1-250 --offsets 0 ...   # OSG submit files
+```
 
-to apply the uniformed format to the source code files
+An event is identified by `(master seed, seed_add, event id, sub-event)`, and
+the nucleon configurations depend only on the event id, so every design point
+sees the same nuclei.
+
+## Where things are
+
+| | |
+|---|---|
+| [`campaigns/`](campaigns/) | the record of each campaign that was run: code revisions, container, design, seeds — enough to reproduce it |
+| [`docs/chain.md`](docs/chain.md) | where each component comes from, how the image is built and published, how to upgrade a component and validate the result |
+| [`docs/osg_operations.md`](docs/osg_operations.md) | running at scale on the Open Science Grid: what has gone wrong |
+| [`docs/numerical_precision.md`](docs/numerical_precision.md) | grid, time-step and sampling convergence of the chain |
+| [`docs/deformation_sampling.md`](docs/deformation_sampling.md) | parameterization of fluctuating nuclear deformation |
+| [`AGENTS.md`](AGENTS.md) | architecture and the traps in the code, for anyone (or any coding agent) about to change it |
+| `scripts/` | design generation, staging, merging, auditing, local re-runs; `scripts/osg/` for collection and recovery on the OSPool |
+| `analysisKit/`, `utilities/` | post-processing of `spvn_results_*.h5` (from upstream) |
+| `docs/notes/` | historical working documents |
+
+## Reproducibility
+
+- Every source is pinned: the framework by commit in `docker/Dockerfile`, each
+  physics code by commit in `codes/get_code_packages.sh`, the base image by
+  digest, Python packages by version, system packages by a frozen OS snapshot.
+- `scripts/campaign_lock.py` writes that whole chain of revisions into a
+  campaign's record.
+- Re-running an event on the same machine is bit-identical. Across machines
+  the initial state and hydro agree and the sampled particles differ at the
+  0.1–1 % level.
+
+## Upstream
+
+For IP-Glasma, 3D MC-Glauber and the other upstream workflows, the Sphinx
+documentation in `docs/SphinxDoc/`, and the mailing list, see
+[chunshen1987/iEBE-MUSIC](https://github.com/chunshen1987/iEBE-MUSIC). On NERSC,
+export `PYTHONIOENCODING=utf-8` and `LC_CTYPE=en_US.UTF8` first.
+
+Python code is formatted with YAPF (`.style.yapf`; run `./formatCode.sh`).

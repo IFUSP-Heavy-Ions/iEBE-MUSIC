@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate the emulator-sweep design: a maximin-ordered Latin hypercube.
 
-The prior is section 18.3 of EMULATOR_SWEEP_PLAN.md and nothing else. This
+The prior is section 18.3 of docs/notes/EMULATOR_SWEEP_PLAN.md and nothing else. This
 script samples it with a Latin hypercube and then re-orders the points so that
 *every prefix* is a good design, not just the full set.
 
@@ -35,7 +35,7 @@ import sys
 
 import numpy as np
 
-# Section 18.3 of EMULATOR_SWEEP_PLAN.md. Order here is the order of the tables
+# Section 18.3 of docs/notes/EMULATOR_SWEEP_PLAN.md. Order here is the order of the tables
 # in that section: TRENTo and the initial state, then hydrodynamics, then the
 # nuclear shape, then the shape fluctuations.
 PRIOR = [

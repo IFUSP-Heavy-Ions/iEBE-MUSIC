@@ -88,7 +88,7 @@ ENV HOME /opt/
 #             (campaign 2: full free-streaming T^munu into MUSIC (Initial_profile 9),
 #              PTB delta f patch for iSS and one particlization per delta f model
 #              (Grad22, CE, PTB), toolkit pT grid 0-5 GeV in 0.05 GeV bins; see
-#              CAMPAIGN2_HANDOFF.md)
+#              campaigns/zr96-c2/NOTES.md)
 #   e655519 = "Fetch every modified component from its fork; one pinned bootstrap"
 #             (same sources as 17ae5b4, verified tree by tree; the patches and the
 #              in-tree sampler are now commits on the QGP-USP branches of the

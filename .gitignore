@@ -129,7 +129,7 @@ combine_multiple_hdf5.py
 collect_events_singularity.sh
 
 # Nucleon-seed pools. Nucleon rows are generated deterministically from
-# (master_seed, pool address) by default -- see EMULATOR_SWEEP_PLAN.md decision
+# (master_seed, pool address) by default -- see docs/notes/EMULATOR_SWEEP_PLAN.md decision
 # D2 -- so no pool is needed. A pool is only required by the legacy
 # seed_source: "file" path; generate one reproducibly with
 #   python3 utilities/make_seed_pool.py --output shared_seeds/nucleon-seeds.hdf \
@@ -144,3 +144,11 @@ nucleon-seeds*.hdf
 /DesignPoint*/
 /zr96_design*/
 /ge76_design*/
+
+# Designs regenerate from a seed (scripts/make_design*.py); the one a campaign
+# ran is in campaigns/<name>/.
+/design/*.csv
+
+# Written into the current directory by Cluster_supports/*/generate_submission_script.py
+/run_singularity.sh
+/singularity.submit

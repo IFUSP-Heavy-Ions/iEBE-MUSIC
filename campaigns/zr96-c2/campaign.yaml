@@ -2,7 +2,7 @@
 name: zr96-c2
 title: "A = 96 isobars (96Zr/96Ru) at 200 GeV: full free-streaming T^munu into hydro, three delta f models"
 status: running          # batch 2 and the extension were still being collected on 2026-11-16
-physics_notes: ../../CAMPAIGN2_HANDOFF.md
+physics_notes: NOTES.md
 
 # --- code ------------------------------------------------------------------
 framework:

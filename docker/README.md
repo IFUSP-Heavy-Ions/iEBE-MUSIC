@@ -1,26 +1,24 @@
-## Using iEBE-MUSIC via Docker
+## The container
 
-Docker is a software tool that allows one to deploy an application in a portable environment. A docker "image" can be created for the application, allowing any user to run a docker "container" from this image.
+`Dockerfile` builds the whole chain from pinned sources: the base image by
+digest, system packages from a frozen OS snapshot, Python packages by version,
+the framework by commit, and through it every physics code by commit
+(`codes/get_code_packages.sh`).
 
-### 1. Build a new Docker image
-We can build a docker image for the iEBE-MUSIC package using the following command,
+    docker build -t iebe-music:full .                                    # every backend
+    docker build --build-arg WITH_OPTIONAL_CODES=0 -t iebe-music:slim .   # TRENTo + hydro + iSS + decays
 
-    docker build -t iebe-music .
+The framework pin cannot name the commit that contains it, so it always points
+at an earlier commit: to ship a change, commit and push it, then bump the SHA
+in the following commit. `scripts/check_docker_pin.sh` checks the pin before a
+push.
 
-### 2. Run iEBE-MUSIC
-The docker container has ready compiled all the software packages for iEBE-MUSIC.
+For Singularity/Apptainer (what OSG jobs run):
 
-	docker run -it --name myiEBE chunshen1987/iebe-music:latest
+    docker save iebe-music:slim | gzip > iebe-music_slim.tar.gz
+    singularity build iebe-music_slim_<framework-sha>_<md5prefix8>.sif docker-archive://iebe-music_slim.tar.gz
 
-### 3. To delete all the Docker images in your laptop
-
-	docker system prune -a
-
-## Using iEBE-MUSIC via Singularity
-
-Use the following command to create a singularity image (sif) from the
-docker image,
-
-    singularity pull  docker://chunshen1987/iebe-music:dev
-
-To run the singularity image, `singularity run iebe-music_dev.sif`
+Give every published image a new name; never overwrite one
+(`docs/osg_operations.md`). `docs/chain.md` has the full build, publish and
+validation procedure. `Dockerfile_ubuntu` is an Ubuntu-based variant of the
+same build.

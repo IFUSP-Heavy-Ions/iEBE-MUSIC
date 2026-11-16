@@ -9,6 +9,6 @@ shift 3
 scratch=${_CONDOR_SCRATCH_DIR:-$PWD}/xsec
 mkdir -p "$scratch"
 exec singularity exec --contain -B /data/mluzum -B "$scratch" "$image" \
-  python3 /data/mluzum/GeSe/scripts/cross_section/run_xsec.py \
+  python3 "${IBEM_REPO:-/data/mluzum/GeSe}"/scripts/cross_section/run_xsec.py \
   --campaign "$campaign" --points "$point" --workers 1 --scratch "$scratch" \
   --log "$scratch/run.log" "$@"

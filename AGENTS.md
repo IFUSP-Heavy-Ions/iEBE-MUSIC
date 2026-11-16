@@ -1,12 +1,13 @@
-# AGENTS.md — iEBE-MUSIC (NewChain)
+# AGENTS.md — iEBE-MUSIC, QGP-USP chain
 
 Event-by-event relativistic heavy-ion collision simulation driver. This is **not** an importable
 library: top-level scripts generate job folders and cluster submission scripts. There is **no test
 suite, no linter config, and no typechecker** — verification means running one event end-to-end.
 
-> **Upgrading the chain?** `SIMULATION_CHAIN_HANDOFF.md` maps every component's source and pin, how the
-> container is built and published, the run/submit contracts, and the validate-before-you-launch workflow.
-> This file is the list of traps that workflow will run into.
+> **Upgrading the chain?** `docs/chain.md` maps every component's source and pin, how the container
+> is built and published, the run/submit contracts, and the validate-before-you-launch workflow.
+> **Running on OSG?** `docs/osg_operations.md` is the list of what has gone wrong there.
+> This file is the list of traps in the code itself.
 
 ## Architecture
 
@@ -20,9 +21,14 @@ suite, no linter config, and no typechecker** — verification means running one
 - `config/parameters_dict_user_*.py`, `config/design_points/*` — user parameter files. Plain Python
   modules defining top-level dicts (`control_dict`, `trento_dict`, `free_streaming_dict`,
   `music_dict`, `iss_dict`, `isobars_conf_dict_{target,projectile}`, `isobar_seed_file`).
-- `codes/` — external physics codes fetched at setup (`*_code` dirs are gitignored) plus two
-  in-repo drivers: `codes/hydro_plus_UrQMD_driver.py` (copied into every event folder; takes
-  **positional** args, no argparse) and `codes/isobar_sampler_code/exec/build_isobars.py`.
+- `codes/` — external physics codes fetched at setup by `get_code_packages.sh`, each at a pinned
+  commit (`*_code` dirs are gitignored), plus the in-repo driver
+  `codes/hydro_plus_UrQMD_driver.py` (copied into every event folder; takes **positional** args,
+  no argparse). The nucleon sampler is `codes/isobar_sampler_code/exec/build_isobars.py`, from
+  the Isobar-Sampler fork.
+- `campaigns/<name>/` — the record of a campaign that was run: manifest, software lock, design.
+- `scripts/` — design generation, OSG staging, merging, auditing, local re-runs; `scripts/osg/`
+  — collection and recovery on the OSPool. `docs/` — the chain, OSG operations, numerics.
 - `Cluster_supports/{OSG,HTCondor}/generate_submission_script.py` — Singularity+condor generators
   that emit `singularity.submit` + `run_singularity.sh`. These are a *separate* path from
   `generate_jobs.py` (which covers `local`, `nersc`, `wsugrid`, `guillimin`, `mcgill`, `stampede2`,
@@ -55,9 +61,13 @@ python3 Cluster_supports/OSG/generate_submission_script.py -param <par.py> -sing
   -n 10 -nev 1 -nth 1 -jobid <Name>          # writes singularity.submit
 condor_submit singularity.submit
 
-# design-point sweeps (run from the directory that will hold the DesignPointN folders)
-python3 MakeDictionaries.py <design.csv> --start-design-point 1 --end-design-point 250
-python3 submit_design_points.py --dry-run      # then without --dry-run
+# design-point sweeps: design -> dictionaries -> staged OSG submission
+python3 scripts/make_design_a96.py --n 2000 --seed 8675309 --out design/my_design.csv
+python3 MakeDictionaries.py --design design/my_design.csv --start-design-point 1 \
+    --end-design-point 250 --output-dir my_dicts
+python3 scripts/stage_campaign.py --dict-dir my_dicts --dps 1-250 --offsets 0 \
+    --jobid-template 'run_b{batch}_dp{dp}' --image osdf:///<path>/<image>.sif \
+    --apbase <output dir on the AP> --aphome <staging dir on the AP> --out /tmp/stage
 
 # collect finished events into a merged HDF5
 ./collect_events.sh <fromFolder> <toFolder>
@@ -68,10 +78,26 @@ defaults — prefer those over guessing flags.
 
 ## Gotchas
 
+- **Every modified physics code lives on a fork, pinned by commit in `codes/get_code_packages.sh`.**
+  Nothing is patched or overlaid during the build. The sampler is `mluzum/Isobar-Sampler`; TRENTo,
+  MUSIC, iSS and the toolkit are under `github.com/IFUSP-Heavy-Ions`, each on a branch `QGP-USP`.
+  To change a component: commit to its fork, bump the SHA, then bump the framework pin in
+  `docker/Dockerfile` in the *following* commit. `docs/chain.md` has the full procedure.
+- **A campaign is recorded in `campaigns/<name>/`, and the record is small on purpose.** Manifest,
+  software lock (`scripts/campaign_lock.py`), design CSV, one submit file and the worker wrapper.
+  Parameter dictionaries are *not* tracked: they regenerate byte-identically from the design, and
+  the manifest carries a digest. Consequently **the text `MakeDictionaries.py` writes is frozen** --
+  changing a description string in it or in the template changes every dictionary and breaks the
+  digest of a recorded campaign. Framework pins up to zr96-c2's `17ae5b4` were fetched from
+  `github.com/mluzum/iEBE-MUSIC` and must stay reachable there.
+- **System packages are pinned to a frozen OS snapshot in `docker/Dockerfile`.** Without that, a
+  rebuild takes the compiler of the day: 17 days after the zr96-c2 image the same recipe produced
+  different binaries (the reference events still agreed bit for bit, but that is luck, not a
+  guarantee).
 - **Reproducibility is assumed, not demonstrated.** The seed scheme is counter-based and the
   container pins the framework to an exact SHA, but nobody has yet run the same event twice on
   local HTCondor and once on OSG and diffed the nucleus HDF5. The common-random-numbers design
-  rests entirely on this. See Phase E2 in `EMULATOR_SWEEP_PLAN.md`; treat it as blocking.
+  rests entirely on this. See Phase E2 in `docs/notes/EMULATOR_SWEEP_PLAN.md`; treat it as blocking.
   First data point (2026-10-30, `scripts/rerun_events_local.py`, campaign image
   `slim-3001ee9` under local docker, 1 thread): zr96 dp0583 event 220 re-ran **bit-identical**
   to the OSG output; event 10 had the same TRENTo event and initial eccentricities, MUSIC
@@ -106,7 +132,7 @@ defaults — prefer those over guessing flags.
   `numpy.random.Philox(key=master_seed, counter=address*2**24)`. **The address must depend only on
   the global event id, never on any nuclear parameter** — that is what keeps design points
   synchronised, so each sees the same nuclei and the deformation shows up as a small shift in
-  positions. `MASTER_SEED = 8675309` is recorded in `EMULATOR_SWEEP_PLAN.md` and in every generated
+  positions. `MASTER_SEED = 8675309` is recorded in `docs/notes/EMULATOR_SWEEP_PLAN.md` and in every generated
   parameter dictionary; changing it invalidates all existing results. The committed
   `shared_seeds/nucleon-seeds.hdf` remains only for the legacy `seed_source: "file"` path.
 - **`build_isobars.py` caches its step+Gaussian fit.** `Rst_w_from_WS` (a BFGS `minimize` over
@@ -130,201 +156,8 @@ defaults — prefer those over guessing flags.
   `results_$(Process)/`. If you touch one generator, check whether the other needs the same change.
 - The OSG **SMASH** branch still hardcodes `event_0` (no event range is passed). The UrQMD branch —
   which is what `afterburner_type: "decay"` uses — is correct. Avoid SMASH until that is fixed.
-- **Never overwrite a path already published over OSDF.** OSG caches OSDF content by path, so
-  overwriting a `.sif` in place leaves the cache serving the *old* bytes. The failure is
-  inconsistent and therefore dangerous: some workers recompute the checksum from the local file
-  and go on hold with `Pelican Client Error: checksum mismatch`, while others fetch the cached copy,
-  both sides agree, and the job **silently runs the wrong image**. This actually happened —
-  `iebe-music_slim.sif` was refreshed under the same name and two batches ran ~10 minutes against
-  the previous, uninstrumented image before it was caught. Publish every image under a unique
-  commit-named path (`iebe-music_slim_<short-sha>.sif`) and reference *that*; never use a mutable
-  alias. When a batch's results are needed, check the image path in the submit file before
-  concluding anything about the numbers.
-- **Never reuse a published SIF filename, even for a "new" build.** Commit-named paths
-  (`iebe-music_slim_<short-sha>.sif`) only protect you if the commit actually changed the
-  image. They do not when the `Dockerfile` pin lags `HEAD`: two builds can both be built
-  from `HEAD = 4723b7e` while containing different pins, so the second overwrites the first
-  under the same path and OSG's OSDF cache keeps serving the stale bytes. That happened here
-  and the workers pulled the *previous* image (`def37b56...`) while the server reported the
-  current one (`443fcee...`). **Put the md5 prefix in the filename**
-  (`iebe-music_slim_<sha>_<md5prefix>.sif`) so uniqueness does not depend on the commit
-  having moved, and derive the name from the pinned SHA rather than from `HEAD`.
-- **`request_disk = 2 GB` is too small for a 20-event job.** Jobs on both campaigns began
-  holding with `Error from slot...: disk usage exceeded allocated disk` (178 A=96 + 15 A=76 in
-  one wave): the execute-node sandbox holds all 20 events' hydro intermediates before the quiet
-  packer compresses them, which overruns 2 GB on the larger events. Staged submit files now
-  request **4 GB** (`stage_campaign.py --disk 4`), and held jobs were fixed in place with
-  `condor_qedit ... RequestDisk 4194304` + `condor_release`. Raise the request before releasing
-  — releasing alone just re-runs into the same limit.
-- **OSG resource requests: ask for 1 GB, not 4.** Peak RSS for a 19-event 76Ge batch on one core
-  was 212 MB, so the old 4 GB default requested ~19x what is used purely for scheduling speed.
-  `request_disk` must cover the *whole* batch, not one event, because events run sequentially into
-  one working directory; it is now settable with `-disk` (default 10 GB). Run large batches from
-  the data disk (`/ospool/ap40/data/matthew.luzum`, ~465 GB) so results land there, but keep
-  condor `log`/`error`/`output` on the home disk, which the generator already does via an absolute
-  `home_log_dir`. Measured over 1990 production jobs (20 events each, decays-only, dx=0.15):
-  wall median 1.09 h (p10 0.60, p90 2.33, max 6.2), peak RSS median 269 MB, p99 733 MB, max
-  1221 MB. Only 2/1990 jobs exceeded 1 GB, both at one design point, so keep 1 GB as the
-  default and `condor_qedit ... RequestMemory 1400` + `condor_release` the rare hold. Memory
-  is a property of the design point, not of job length: one dp sat at 733 MB median.
-  Output is ~156 KB per event (`spvn_results_<id>.h5`, measured over 30k files), i.e. ~310 MB
-  per design point at 2000 events, so the 465 GB data disk holds ~1500 design points at that
-  statistics — the quota binds at 2000 points (~620 GB), not earlier.
-- **Pulling results: bundle on the AP, never walk the tree file by file.** A design point is
-  ~4000 small files (1900 h5 at 156 KB + 2000 trento summaries + 100 drawn CSVs). CephFS
-  metadata latency on the AP is ~90 ms per file, so both rsync and `tar cf - | ssh` crawl at
-  ~0.8 MB/s however fast the link is (16 parallel raw streams measured 48 MB/s). `tar czf`
-  collapses 300 MB to 61 MB (4.9x — float32 h5 data) and the single file moves in ~15 s, so
-  pack per design point on the AP and transfer the archive. The packing step parallelizes;
-  the per-file walk does not.
-- **Never edit a shell script while instances of it are running.** bash reads a script
-  incrementally by byte offset, so an in-place edit makes the running instance resume in the
-  middle of new text — this produced `syntax error near unexpected token ';;'` mid-pull and
-  silently killed two waves.  Launch long runs from a timestamped copy
-  (`cp scripts/x.sh /tmp/opencode/x_$(date +%s).sh && bash /tmp/opencode/x_*.sh ...`).
-  Pair this with `ControlMaster=auto,ControlPath=/tmp/opencode/cm_osg,ControlPersist=600` in
-  the pull tooling: a per-dp probe+count+copy is three connections, and multiplexing them onto
-  one TCP stream is what keeps the AP from blackholing ssh during a 300-point sweep.
-- **The AP rate-limits ssh: a connection burst gets port 22 blackholed for ~30 min.** Eight
-  parallel workers opening 4 connections each per design point was enough. The symptoms look
-  like an outage but are not: `ssh` says "Network is unreachable" (the AP resolves to IPv6,
-  which the local host has no route for) or times out, while port 443 on the same host
-  answers "connection refused" and `ap41.uw.osg-htc.org:22` / `ap42.uw.osg-htc.org:22` stay
-  open. Keep concurrency <= 3, use 1-2 connections per design point, reuse a ControlMaster
-  for short control commands, and do not keep retrying during a block — retries can extend
-  it. Running OSG jobs are unaffected: they talk to the schedd, not to our ssh.
-- **Result layout changes at dp0461: one archive per job.** In quiet mode the worker now packs
-  `spvn_results/` into `spvn_results_<proc>.tar.gz` on local scratch and the submit file lists
-  that single file instead of the directory (~100 files/job). Packing on the AP instead costs
-  ~90 ms per file of CephFS latency; on the worker it is seconds. It also cuts the stored
-  footprint ~5x, which is what keeps 2000 design points inside the 465 GB quota (620 GB of
-  loose h5 vs ~124 GB of archives). dp0001-0460 keep the directory layout, so tooling must
-  handle both: `scripts/osg_pull_results.sh` pulls either, `scripts/osg_merge_reruns.sh`
-  folds re-run output back in either (renaming `spvn_results_0.tar.gz` to the block it covered,
-  because re-runs are single jobs with ProcessId 0).
-- **The data disk quota binds on FILES, not bytes: ~2M (`ceph.dir.rfiles`).** `quota -s` only
-  reports the local mounts and `df` reports the whole CephFS, so both look healthy while every
-  write fails with `errno 122 Disk quota exceeded` and jobs pile up on transfer holds
-  (`HoldReason` naming the file it failed to write). A directory-layout design point is ~4000
-  files (1900 h5 + 2000 trento summaries + 100 drawn), so ~460 points exhausted 2M; the archive
-  layout is 100 files per point and would fit ~20,000. Consequences: (a) the AP is staging, not
-  the archive — pull, verify, delete; (b) purging old points with `rm -rf` on CephFS is slow
-  (~10-30 files/s for 4000-file directories) and running several in parallel pushed the AP to
-  load average >1000, at which point `condor_submit` and even `ssh` hang. Delete at low
-  concurrency (2-4), and check `uptime` before blaming a hung command on the script.
-- **When the AP's CephFS metadata server is saturated, put every submit-side file on the AP's
-  local `/tmp`.** Measured during a 2026-10-24 storm: `mkdir` on the data disk took 1m51s and
-  file creation ~3 min, so a 378-dp staging pass spent 53 min on `mkdir` and wrote ~40 of 756
-  files in two hours — while the 7.3k-job queue drained to zero and the pool idled. With the
-  submit files, parameter dictionaries, and `run_singularity.sh` on `/tmp` (and `initialdir`
-  still pointing at the data-disk dp dir), submission is **0.6 s per cluster** instead of
-  10 min. Two site quirks: (a) `condor_submit` given several submit files silently submits only
-  the **last** one (a 378-file bulk call created exactly one cluster); loop one file per
-  invocation. (b) tar-extracted submit files can lack a trailing newline, producing
-  `ERROR: Failed to parse command file (line N)` on the final `queue` line — `echo >>` fixes it.
-- **Merging per-event h5 into one file per dp: use `scripts/merge_dp_h5.py`, not
-  `combine_multiple_hdf5.py`.** The latter spawns one `h5copy` per event, which is ~10,000
-  subprocesses for a 10,000-event design point (~1 h). The in-process merger copies groups and
-  datasets with h5py and does dp0001's 1,894 events in ~60 s with byte-identical output
-  (verified: same group names, same 46 datasets, values equal). `scripts/consolidate_dps.sh`
-  uses it and records `merged/<dp>/sources.txt` (number of archives merged); a dp is re-merged
-  automatically when its source count changes (`100 -> 300 -> 500` as augmentation batches
-  land) and once it reaches `MIN_SOURCES` (default 90), so a half-delivered batch never
-  produces a partial file. `MIN_SOURCES` is 90, not 100, because a 100-job batch ends
-  with 96-99 archives: events whose freeze-out surface is empty produce no h5, so a
-  ">= 100" gate never merged a single-batch point at all (campaign-2 A=96 sat at 33
-  points pulled, 0 merged until `2efabae`).
-- **The merged h5 is written uncompressed on purpose — do not "fix" that.** Merged
-  cost is ~253 KB per event (campaign 2, three `deltaf_*` models, 100 pT bins) against
-  a 204 KB raw payload, i.e. ~24 % HDF5 metadata, and ~1.5 TB for 6,000 events at
-  1,000 design points. Compressing each dataset the way the per-event files are
-  (gzip 9, chunk = full shape) makes the merged file **1.8x larger** (442 KB/event):
-  every event contributes 98 tiny arrays that are too small to amortise a chunk
-  header plus a gzip stream, which is also why the per-event h5 is 456 KB while the
-  same data is only 168 KB inside the job tarball. Only whole-file gzip wins
-  (156 KB/event, 63 %), so it belongs in cold storage, not in the merger.
-- **A campaign's reproduction package lives inside its results tree**, not in the
-  repo: `/data/mluzum/zr96c2_results/merged/REPRODUCTION/`, written by
-  `scripts/build_reproduction_package.py`.  It carries the SIF md5 plus the md5 of
-  each built binary, the framework revision, the design with the commands that
-  regenerate it, all 1,000 dictionaries, the resolved dictionary, the exact submit
-  file and wrapper, and two scripts that re-derive the design and the
-  dictionaries.  The counts inside are a snapshot, so re-run the generator when
-  the campaign finishes; the provenance is final.
-- **The published pin, not HEAD, is what a reader can check out.**
-  `mluzum/iEBE-MUSIC` branch `NME` has `17ae5b4` (the container pin) and every
-  input needed to reproduce campaign 2 -- verified that the design and all 1,000
-  dictionaries regenerate byte-identically from it.  Local commits after
-  `d47e433` touch only submit-side tooling and are **not pushed**, so never point
-  a reproduction instruction at `HEAD` (or at `origin`, which is
-  `jppicchetti/iEBE-MUSIC` and has none of this).
-- **Local `/data` is mergerfs over `/mnt/data1..5`, and `df` hides per-branch inode exhaustion.**
-  The branch holding the repo/results hit **953,888/953,888 inodes = 100%** while `df -h` showed
-  3.6 TB free; every write then failed with `No space left on device` (including a 10 KB
-  `mkdir`), and pulls silently failed. A directory-layout design point costs ~6,000 inodes
-  (1,900 event h5 + 2,000 TRENTo summaries + 100 drawn CSVs), so ~160 dps filled the table.
-  Check `df -i /mnt/data5`, not `df -h`, before blaming space. Remedy: consolidate each dp to
-  one h5 (`scripts/consolidate_dps.sh`, ~1 file instead of ~4,000), keep the
-  `events_drawn_*.csv` files (they are NOT inside the merged h5), and only then delete the raw
-  tree. Merged-vs-raw parity was verified group-for-group (122/122) before the first cleanup.
-  **Archive-layout pulls must keep the per-job tarballs and never extract them**: extraction
-  costs ~6,200 files per dp (20 events x h5 + TRENTO summary + grid extent per job tarball),
-  which refilled the table after only ~90 points. `osg_pull_results.sh` now keeps the 100
-  tarballs per dp and verifies by listing archive contents; consolidation extracts one dp at a
-  time into /tmp.
-- **A single `condor_rm -constraint` may remove only a fraction of a large queue.** Purging the
-  campaign-1 queue (21,508 jobs: `regexp("iEBEMUSIC_(ge76|zr96)_", JobBatchName)`) marked only
-  8,438 for removal; 10,015 idle jobs survived and were still visible afterwards.  Re-issuing the
-  removal (split per campaign: `iEBEMUSIC_ge76`, `iEBEMUSIC_zr96_`) cleared them within a minute.
-  When switching campaigns, verify `condor_q -af JobBatchName | grep -c <old pattern>` reaches 0
-  rather than trusting the one-shot command's "marked for removal" message.  Constrain on the
-  campaign prefix, not the campaign-2 name, so `zr96c2_` survives.
-- **The AP caps in-flight jobs at 50,000 per owner, and excess submissions are deferred, not
-  rejected.** `condor_config_val -schedd MAX_JOBS_PER_OWNER` returns 50000. When the queue is at
-  the cap, `condor_submit` still prints "submitted to cluster N" (the cluster object is created)
-  but the individual jobs are committed only as the owner's total drops; `condor_q` shows the
-  cluster with no jobs, and `job.<cluster>.0.log` contains the 035 "Cluster submitted" line but
-  no 000 job-submission line. Observed directly: cluster 16053576 had 0 queued jobs, then 12
-  ten minutes later, with the owner total steady at ~49,994. **Never resubmit a design point
-  just because its cluster is not in `condor_q`** — wait, and confirm via
-  `~/log/job.<cluster>.0.log` or by watching the count; a duplicate submission runs the same
-  deterministic events again and only wastes core-hours. Practical consequence: the queue
-  self-refills to ~50k from already-submitted work, so a tranche larger than the remaining
-  headroom is safe to submit in one go.
-- **Never put `checkpoint_exit_code` in an OSG submit file.** A submit file
-  carrying it makes the schedd inject `TARGET.HasSelfCheckpointTransfers` into
-  the job's Requirements.  Nothing in the pool advertises that attribute, so
-  **every slot rejects every job** -- and it fails silently: jobs stay idle,
-  `condor_q` looks normal, and the only clue is `condor_q -better-analyze`
-  saying "0 slots match" plus a stale "Last successful match".  On 2026-11-01
-  this cost ~18 h of zero placement on 34,122 queued jobs; the same line was in
-  both `Cluster_supports/*/generate_submission_script.py` templates, with the
-  checkpointing code long unused.  Requirements are also *baked into the job
-  classad at submit time*, so fixing the submit file does not help already-queued
-  jobs: they need
-  `condor_qedit -constraint 'JobStatus == 1 && ...' Requirements '<expr without the clause>'`.
-  Diagnose placement failures with `condor_q -better-analyze <cluster>`, never by
-  reading `condor_q`'s totals.
-- **Give maintenance jobs `JobPrio 100`.** A single re-run or test job submitted while a
-  tranche is in flight sits behind tens of thousands of idle jobs and can look "lost" (it has
-  no hold reason and no history record because it never started). `condor_qedit <cluster>.0
-  JobPrio 100` gets it scheduled promptly. Note `condor_q <cluster> | tail -2` prints the
-  queue summary, not the job — use `condor_q -af ClusterId ProcId JobStatus | awk '$1==<c>'`.
-- **A job that skips one event must still transfer its other 19.** `prepare_surface_files_for_urqmd`
-  returns False when the freeze-out surface is empty (very peripheral / tiny fireball), the
-  driver skips that event *silently* (no print), and at the end exits 73. The submit template
-  used to carry `periodic_remove = (ExitCode == 73)`, which races the output transfer: when
-  the remove wins the whole job's 20 events vanish with no HoldReason, exit code, or message,
-  and the job simply disappears from the queue. That cost 47 of 2000 blocks (~2.3%) in the
-  first production batch and was only found by diffing h5 files against `events_drawn.csv`.
-  `periodic_remove` is gone. Expect ~1-2% of drawn events to be skipped for real (surface
-  size 0); they stay in `events_drawn.csv` with `mult > 0` and are visible as drawn-but-missing
-  h5, which is exactly the set to re-run.
 - Root-level `collect_events.sh`, `combine_multiple_hdf5.py`, `average_event_spvn_h5.py` are
   gitignored because `generate_jobs.py` copies them into the CWD. Missing-from-git is not a bug.
-- `submit_design_points.py` contains machine-specific hardcodes that must be edited before use:
-  `DEFAULT_OSG_SCRIPT = /home/joaopaulo.picchetti/iEBE-MUSIC/...` and a singularity image under
-  `$DATA/singularity_repos/`.
 - `MakeDictionaries.py` defaults to a `./design` CSV that is **not in the repo** — supply your own.
   Columns are strict: `WS_radius`, `WS_diffuseness`, `beta_2`, `gamma`, `beta_3`, `nucleon-width`,
   `tau`, `reduced-thickness`, `sigma_k`, `shear_viscosity_3_*`, `bulk_viscosity_3_*`, `T_freeze`
@@ -365,13 +198,8 @@ defaults — prefer those over guessing flags.
   to reproduce anything from before that date.
 - The OSG/HTCondor generator copies the seed HDF5 next to the param file and references it by
   basename. That root-level `nucleon-seeds.hdf` is **not** gitignored — do not commit it.
-- `README.md` references `generate_event_batches.py` / `submit_job_batches.py`; neither exists in
-  this tree. Use `--event_start_id/--event_end_id` instead.
-- Root-level `collect_events.sh`, `combine_multiple_hdf5.py`, `average_event_spvn_h5.py` are
-  gitignored because `generate_jobs.py` copies them into the CWD. Missing-from-git is not a bug.
 - `hydro_plus_UrQMD_driver.py`'s positional argument order is assembled in
   `generate_full_job_script()` (`generate_jobs.py:266`) — change both sides together.
-
 - **`hadronic_afterburner_toolkit`'s `Analysis.cpp` ignores `rap_min`/`rap_max`.** `FlowAnalysis()`
   constructs one `singleParticleSpectra` per entry of a hardcoded list of experimental acceptance
   windows (ALICE ±0.5, STAR ±1, CMS ±2.4, ATLAS ±2.5/±4.9, V0A/V0C, PHENIX BBC, ...) and calls
@@ -386,7 +214,6 @@ defaults — prefer those over guessing flags.
   ±4, worse toward the edge). `dNdy_normalization_width` switches to the no-cut estimator and is
   derived from `iss_dict` only when `music_dict['boost_invariant'] == 1`; it must stay 0 for
   (3+1)-d runs. The `9999`/`99999` references use pseudorapidity and never get it.
-
 - **Batch augmentation is event-id based and already wired: batch k uses ids
   `[k*B, (k+1)*B-1]` via `-event_start_id` (the 6th job argument, `eventOffset` in
   `run_singularity.sh`).** Batch 1 is 0..1999. New ids are new events (freeze-out seed
@@ -422,8 +249,6 @@ defaults — prefer those over guessing flags.
   just has fewer rows than were requested. The CSV (`event_id, b, b_max, b_over_bmax, mult, status,
   seed_add`) is rewritten per event, keyed by event id, so the adaptive-grid rerun cannot duplicate
   rows. Centrality percentiles need the count of failures, not only the count of survivors.
-
-
 - **`Initial_profile 92` threw the free-streaming flow away; 9 keeps the full T^munu.** Until
   `d365f42` `connect_trento_event` wrote only the Landau-matched e, so hydro started at rest
   and lost ~17% of the energy (tau_fs 0.93); the first zr96/ge76 campaigns ran that way. The
@@ -455,42 +280,6 @@ defaults — prefer those over guessing flags.
   mounts a modified file (driver, generate_jobs, master, a patched iSS.e) over the image's,
   `--set` appends parameter overrides. Local reruns are deterministic; across machines the
   initial state and hydro agree but iSS samples can differ (see Reproducibility above).
-
-- **A `condor_rm` with an empty cluster id and a `-constraint` deletes the whole queue.** Parsing
-  the cluster out of a failed `condor_submit` yields `""`, and `condor_rm "" -constraint '...'` is
-  not a no-op: it applied the constraint to every job the owner had, removing ~26,000 queued
-  batch-2 jobs on 2026-11-05 (the intended target was 89 procs of one cluster). The surviving
-  3,130 were the procs the constraint happened to keep, scattered across 294 points. Always verify
-  the cluster id is non-empty before using it, and prefer explicit `<cluster>.<proc>` ids over a
-  constraint. Recovery is resubmission, which is exact because events are deterministic, but it
-  costs a full transit of the queue.
-- **A 0-byte job archive (the packing step died) strands its whole design point.** It cannot pass a
-  non-empty arrival check, so the collector never deletes it and the point is never pruned; and the
-  merger's `tar xzf` fails, aborting the point. `osg_fetch_prune.sh` now reads sizes in the same
-  listing it already does, removes empty archives on both sides and logs `REMOTE_EMPTY`, and
-  `consolidate_dps.sh` skips them with `SKIP_EMPTY`. The job still has to be re-run (dp2310 job 18).
-- **An h5 truncated inside an archive keeps the HDF5 signature.** The merger's signature check
-  passed it, then h5py failed mid-copy and aborted the point with a traceback that did not name the
-  file — dp2358 lost four days to 14 such files, all from one job (12 of 0 bytes, 2 truncated at a
-  page boundary). `merge_dp_h5.py` now opens each file once before copying anything, names any it
-  cannot read, and skips it, so one bad job costs 20 events instead of the whole point. Repair is a
-  re-run of those events, replaced inside that one archive (entry count before/after must match).
-- **Merge only at batch boundaries.** A batch is 100 archives and is complete at `MIN_SOURCES` (90),
-  so a count in between (101–189) is a moving target: the point re-merges on every arrival. With
-  partial batch-2 blocks trickling in, 294 points sat in that range. `batch_complete()` merges only
-  when `n % 100 == 0` or `n % 100 >= MIN_SOURCES`; a point that genuinely ends short still merges.
-- **`condor_history` and `condor_q` are per-schedd but cluster ids are shared with other users.**
-  A range filter (`ClusterId >= X && <= Y`) returns strangers' jobs (`opt12_*`, `s34_test_*`), which
-  looks like our jobs finishing with no output. Filter on `JobBatchName`, never on a cluster range.
-
-- **A single-job repair must rewrite both `$(Process)` and `queue 100`.** The staged submit files
-  are blocks of 100 jobs, so `arguments = <dict> $(Process) 20 1 0 2000` plus `queue 100` reproduces
-  one block. To re-run one job of a block, write the index literally in `arguments` (the worker dials
-  `event_start_id = eventOffset + processId*20` and names the archive after `processId`, both taken
-  from argv, not from the slot's ProcId), point `transfer_output_files` at that exact name, and
-  change the queue line to `queue 1`. Leaving `queue 100` in place submits 100 identical jobs that
-  all write the same archive -- the result is correct but costs 100x the core-hours (done once:
-  five repairs, 499 redundant jobs).
 
 ## Style
 
