@@ -37,12 +37,17 @@ image:
     codes/hadronic_afterburner_toolkit_code/hadronic_afterburner_tools.e: 3080be19e6f7033821c16aa8c226cea3
     codes/trento_code/build/src/trento: ce585a5aee9fb6621152fcdc069b597d
     codes/hydro_plus_UrQMD_driver.py: 2b703c0ef0a7f0baa4945cb4f6cdad6b
+  # The build also downloads data tables (equation of state, delta f
+  # coefficients) from URLs that are not versioned.  Digest of every file under
+  # iSS_code/iSS_tables, MUSIC_code/EOS and hadronic_afterburner_toolkit_code/EOS:
+  #   find <those three> -type f | sort | xargs md5sum | md5sum
+  data_tables_md5: 5282cba5eb292fc9ec2cf16aa306ccfc
   # Rebuilt from the recipe on 2026-11-16, 17 days after the campaign image:
   # the base repositories had moved (gcc 11.5.0-17, glibc 2.34-290, fftw
   # 3.3.8-14), all four binaries have different md5s, and dp0583 events 101,
   # 140 and 377 came out bit-identical to the campaign image on the same
   # machine (294/294 datasets).  So a rebuild is not the same file, but it was
-  # still the same code in effect.  That is evidence for one date and one
+  # still the same code in effect, with the same data tables.  That is evidence for one date and one
   # toolchain step, not a guarantee: keep the image.
   rebuild_check: {date: 2026-11-16, binaries_identical: false, reference_events_bit_identical: true}
 
