@@ -33,7 +33,10 @@ echo -e "${Green}compile TRENTo ... ${NC}"
     rm -fr build
     mkdir -p build
     cd build
-    cmake .. -DNATIVE=OFF
+    # TRENTo declares cmake_minimum_required(VERSION 3.4), and CMake 4 refuses
+    # anything below 3.5.  The policy floor lets it configure unchanged; CMake 3
+    # ignores the variable.
+    cmake .. -DNATIVE=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5
     make -j${number_of_cores_to_compile}
     make install
 )
