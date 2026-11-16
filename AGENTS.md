@@ -4,6 +4,10 @@ Event-by-event relativistic heavy-ion collision simulation driver. This is **not
 library: top-level scripts generate job folders and cluster submission scripts. There is **no test
 suite, no linter config, and no typechecker** — verification means running one event end-to-end.
 
+> **Upgrading the chain?** `SIMULATION_CHAIN_HANDOFF.md` maps every component's source and pin, how the
+> container is built and published, the run/submit contracts, and the validate-before-you-launch workflow.
+> This file is the list of traps that workflow will run into.
+
 ## Architecture
 
 - `generate_jobs.py` — main entrypoint. Imports a user parameter file with `__import__`, then writes
