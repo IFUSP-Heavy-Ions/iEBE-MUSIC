@@ -212,6 +212,11 @@ Requirements = TARGET.HasSingularity && StringListIMember("stash", HasFileTransf
         input_files.append(transfer_seed_file)
     if para_dict_.get("event_list"):
         input_files.append(para_dict_["event_list"])
+        # The list is named in the job's environment rather than in
+        # run_singularity.sh, so that one wrapper serves every design point
+        # (stage_campaign.py ships a single copy).
+        script.write('\nenvironment = "IEBE_EVENT_LIST_FILE={}"\n'.format(
+            path.basename(para_dict_["event_list"])))
     script.write("\ntransfer_input_files = {}\n".format(
         ", ".join(input_files)))
 
@@ -301,7 +306,8 @@ output_mode="__OUTPUT_MODE__"
 # (scripts/select_events.py), the event range below addresses *positions* of
 # that list, and the driver simulates the events found there with their
 # weights.  Without a list the range is a range of event ids, as always.
-event_list="__EVENT_LIST__"
+# The submit file names the list in the environment.
+event_list="${IEBE_EVENT_LIST_FILE:-}"
 if [ -n "${event_list}" ]; then
     if [ ! -f "${event_list}" ]; then
         echo "event list ${event_list} was not transferred" >&2
@@ -350,9 +356,7 @@ printf "Job running as user: `/usr/bin/id`\\n"
 printf "Working directory: ${SCRATCH_DIR}\\n"
 
 """.replace("__NURQMD_SAMPLES__", str(para_dict_["n_urqmd_per_hydro"])
-              ).replace("__OUTPUT_MODE__", para_dict_.get("output_mode", "quiet")
-              ).replace("__EVENT_LIST__",
-                        path.basename(para_dict_.get("event_list") or "")))
+              ).replace("__OUTPUT_MODE__", para_dict_.get("output_mode", "quiet")))
     if seed_file:
         script.write("""
 seedfile="${7:-}"

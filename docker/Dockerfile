@@ -133,9 +133,12 @@ ENV HOME /opt/
 #              forks, and the framework is fetched from the group organization.
 #              Earlier pins on this list were fetched from github.com/mluzum/iEBE-MUSIC,
 #              where they remain.)
-#   6604e5f = "Pin the sampler with the vectorised deformation (b5eab93)"
+#   b2e0a22 = "Pin the sampler and TRENTo that can draw events in batches"
 #             (importance sampling: phase-1 drawing and selection, event-list
 #              mode in the driver; single-event runs are unchanged)
+#   6604e5f = "Pin the sampler with the vectorised deformation (b5eab93)"
+#             (selection records for the analysis; the sampler deforms a
+#              nucleus 34x faster and gives the same nuclei bit for bit)
 RUN cd ${HOME} && \
     mkdir iEBE-MUSIC && cd iEBE-MUSIC && \
     git init -q . && \
