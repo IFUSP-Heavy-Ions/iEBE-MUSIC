@@ -757,18 +757,69 @@ def load_event_list(list_path):
     return events
 
 
+def pin_event_seeds(event_id):
+    """Make the particle-sampling seeds of this event depend on its id only.
+
+    generate_jobs.py writes the iSS and analysis seeds once per job folder,
+    from the id the folder starts at, and run_afterburner.sh adds only the
+    sub-event and oversampling indices.  All events of a job therefore share
+    one seed, and the seed of an event depends on which block of ids its job
+    covers.  With a fixed block layout that is the same at every design point,
+    which is all the earlier campaigns needed.  With an event list it is not:
+    the same event sits at a different position of each design point's list,
+    so it would be particlized with different random numbers at different
+    design points and the sampling noise would no longer cancel between them.
+
+    Rewrite both seeds to what generate_jobs.py gives a folder that starts at
+    this event, so that an event from a list is identical to the same event
+    run alone.
+    """
+    weyl, modulus = 2654435761, 2147483647
+    seeds = {
+        "iSS/iSS_parameters.dat": 7919 + (int(event_id) * weyl) % modulus,
+        "hadronic_afterburner_toolkit/parameters.dat":
+            104729 + (int(event_id) * weyl) % modulus,
+    }
+    targets = glob("UrQMDev_*/iSS/iSS_parameters.dat") + glob(
+        "SMASHev_*/iSS/iSS_parameters.dat") + [
+            "hadronic_afterburner_toolkit/parameters.dat"
+        ]
+    for target in targets:
+        if not path.isfile(target):
+            continue
+        seed = seeds["iSS/iSS_parameters.dat" if target.endswith(
+            "iSS_parameters.dat") else
+                     "hadronic_afterburner_toolkit/parameters.dat"]
+        with open(target, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        with open(target, "w", encoding="utf-8") as f:
+            for line in lines:
+                if line.strip().startswith("randomSeed"):
+                    # the afterburner script reads the third space-separated
+                    # field of this line
+                    f.write("randomSeed = %d\n" % seed)
+                else:
+                    f.write(line)
+
+
 def selection_check(event_id, mult):
     """Compare this event's multiplicity with the one it was selected on.
 
     The weight was fixed in phase 1 and stays valid whatever this says; a
     mismatch means this machine produced a different initial condition for the
     same event id than the machine that drew it.
+
+    The tolerance is not zero because two machines do not agree to the last
+    bit: over 3,762 events of one design point the multiplicities drawn on a
+    local host and on OSG workers differed by 1e-10 in the median and 4e-7 at
+    most (nucleon positions are stored in single precision, and the sampler's
+    numpy takes CPU-dependent paths).  A different event differs at order one.
     """
     row = EVENT_SELECTION.get(int(event_id))
     if row is None or not row.get("estimator") or mult is None:
         return ""
     expected = float(row["estimator"])
-    if abs(mult - expected) <= 1e-8 * max(abs(expected), 1.0):
+    if abs(mult - expected) <= 1e-5 * max(abs(expected), 1.0):
         return "match"
     print("\U000026A0  event {}: multiplicity {:.10g} differs from the {:.10g} "
           "it was selected on".format(event_id, mult, expected),
@@ -1863,6 +1914,8 @@ def main(para_dict_):
         curr_time = time.asctime()
 
         event_id = str(global_event_id)
+        if event_list_file:
+            pin_event_seeds(global_event_id)
         if (para_dict_['initial_condition'] != "self"
                 and para_dict_['initial_condition'] != "fixCentrality"):
             initial_database_name = (

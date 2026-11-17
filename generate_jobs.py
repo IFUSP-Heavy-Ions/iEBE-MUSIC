@@ -665,8 +665,12 @@ do
     # events get different streams, and (c) the SAME event gets the SAME stream at
     # every grid resolution -- which is what makes a dx comparison a
     # common-random-numbers comparison instead of a noise-dominated one.
-    # Note $SubEventId is the global event id, despite the name: run_urqmd_event()
-    # passes event_id as the script's $1.
+    # Note $SubEventId is the sub-event index (the UrQMDev_<n> folder), not the
+    # global event id.  The base seed below is written once per job folder from
+    # the id the folder starts at, so every event of a job shares this seed and
+    # an event's seed depends on its job's block of ids.  When a job runs from
+    # an event list the driver rewrites the base seed per event
+    # (pin_event_seeds) so that it depends on the event id alone.
     BASESEED=`cat iSS_parameters.dat | grep "randomSeed" | cut -f 3 -d " "`
     if [ "$BASESEED" = "-1" ]; then
         BASESEED=8675309

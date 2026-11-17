@@ -78,6 +78,18 @@ defaults — prefer those over guessing flags.
 
 ## Gotchas
 
+- **Importance sampling is two phases, and the selection is made exactly once.** Phase 1
+  (`scripts/draw_events.py`, `scripts/select_events.py`) draws every event id with the sampler and
+  TRENTo in batches, calibrates multiplicity to centrality, and writes the list of accepted events
+  with weights `1/P`. Phase 2 runs the chain from that list (`IEBE_EVENT_LIST`; a job owns
+  *positions* of the list, files are still named by event id). Never let a worker redo the
+  decision: two machines do not agree on the multiplicity to the last bit (up to 4e-7 between a
+  local host and OSG), so an event on a bin edge could be kept on one and dropped on another.
+  The batch paths (`configuration_stride` in the sampler, `--first-event-id` in TRENTo) exist to
+  reproduce single-event runs digit for digit; `tests/sampler_stride.sh` and
+  `tests/trento_event_id_mode.sh` check that and must be re-run for a new system or a new TRENTo.
+  The sampler costs 0.1 CPU-s per A = 96 nucleus and dominates phase 1; one call holds at most
+  ~2000 configurations (HDF5 attribute limit).
 - **Every modified physics code lives on a fork, pinned by commit in `codes/get_code_packages.sh`.**
   Nothing is patched or overlaid during the build. The sampler is `mluzum/Isobar-Sampler`; TRENTo,
   MUSIC, iSS and the toolkit are under `github.com/IFUSP-Heavy-Ions`, each on a branch `QGP-USP`.
@@ -227,15 +239,17 @@ defaults — prefer those over guessing flags.
   (`spvn_results_2000`...), so a batch is `2000 <= id <= 3999` regardless of file names.
   `audit_event_losses.py` accepts the optional tag; `--blocks` must become 300 for a
   three-batch design point.
-- **An event is identified by `(MASTER_SEED, seed_add, event_id, iev)` — all four, and
-  `seed_add` must never be random.** The freeze-out seed is
-  `np.random.default_rng([seed_add, event_id, iev])`, the TRENTo seed is `event_id + 1`, and the
-  nucleon pool address depends only on `event_id`. The OSG and HTCondor generators used to draw
-  `seed_add` with `random.SystemRandom().randint(0, 1e7)` once per submission, so every design point
-  got its own private event set and the common random numbers the ensemble rests on were silently
-  absent. The 2026-10-22 corner run is the documented case: three corners, seeds 9418965, 4477493
-  and 1182519. It is now `CAMPAIGN_SEED_ADD = 0`, overridable with `IBEM_SEED_ADD` only for
-  deliberately uncorrelated exploratory runs.
+- **An event's initial state depends on its id alone; its particle sample, until now, also on its
+  job.** The nucleon pool address depends only on `event_id` and the TRENTo seed is `event_id + 1`
+  (`seed_add` enters the 3D-Glauber path and is a campaign constant, `CAMPAIGN_SEED_ADD = 0`; it
+  used to be drawn at random per submission, which silently gave every design point a private
+  event set). The iSS and analysis seeds are different: `generate_jobs.py` writes them once per job
+  folder from the id the folder *starts at*, and `run_afterburner.sh` adds only the sub-event and
+  oversampling indices (`$SubEventId` is the `UrQMDev_<n>` index, not an event id). So all events of
+  a job share one particle-sampling seed, and an event's seed depends on its job's block of ids.
+  That is harmless while every design point uses the same block layout, and it is why
+  `scripts/rerun_events_local.py` rebuilds the block (`--per-job`). In event-list mode the driver
+  resets both seeds per event (`pin_event_seeds`) to a function of the event id.
 - **`b_max` is per design point on purpose; do not "simplify" it to a campaign constant.** It is
   computed from `WS_radius`, `WS_diffusiveness`, `nucleon-width`, the 2-sigma deformation and (since
   campaign 2) TRENTo's sigma_NN (+ sqrt(sigma_NN/pi) - sqrt(4.23/pi), zero at 200 GeV), so a

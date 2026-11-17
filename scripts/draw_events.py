@@ -4,8 +4,10 @@
 For a block of global event ids this generates the nuclei and runs TRENTo --
 nothing else -- and records, per event, the impact parameter and the total
 initial multiplicity that the event selection is based on.  It does so in
-batches (one sampler call and one TRENTo call per few thousand events) at
-about 12 ms per event, against 1.4 s when each event starts its own processes.
+batches (one sampler call and one TRENTo call per thousand events), which
+costs about 0.2 CPU-seconds per event for A = 96 -- nearly all of it the
+nucleus sampler, at 0.1 s per nucleus -- against 1.4 s when each event starts
+its own processes.
 
 The events are *the same events* the full chain later regenerates one at a
 time from their ids: the sampler's `configuration_stride` and TRENTo's
@@ -58,7 +60,7 @@ def make_job_folder(param, workdir, framework):
     return os.path.join(workdir, "playground", "event_0", "TRENTo")
 
 
-def sample_nuclei(trento_dir, side, first_id, n, sampler):
+def sample_nuclei(trento_dir, side, first_id, n, sampler, processes=1):
     """One sampler call for the nuclei of events first_id .. first_id+n-1."""
     folder = os.path.join(trento_dir, "Isobar-Sampler_" + side)
     conf_file = "isobars-conf_{}.yaml".format(side)
@@ -68,6 +70,12 @@ def sample_nuclei(trento_dir, side, first_id, n, sampler):
     offset = 0 if side == "target" else 1
     samples = conf["isobar_samples"]
     samples["number_configs"]["value"] = int(n)
+    # The job templates ask the sampler for every core it can see (-1).  A
+    # drawer is one of many on a node, or a one-core grid job: be explicit.
+    samples["number_of_parallel_processes"] = {
+        "description": "Number of processes to compute in parallel.",
+        "value": int(processes),
+    }
     samples["start_configuration"] = {
         "description": "Pool address of the first configuration",
         "value": int(((2 * first_id + offset) * WEYL) % MODULUS),
@@ -88,11 +96,14 @@ def sample_nuclei(trento_dir, side, first_id, n, sampler):
         samples["master_seed"]["value"])
 
 
-def run_batch(trento_dir, first_id, n, trento, sampler):
-    jobs = [
-        sample_nuclei(trento_dir, side, first_id, n, sampler)
-        for side in ("target", "projectile")
-    ]
+def run_batch(trento_dir, first_id, n, trento, sampler, processes=1):
+    jobs = []
+    for side in ("target", "projectile"):
+        jobs.append(
+            sample_nuclei(trento_dir, side, first_id, n, sampler, processes))
+        if processes == 1:
+            # one core: one nucleus at a time
+            jobs[-1][0].wait()
     for proc, produced, wanted, _ in jobs:
         if proc.wait() != 0:
             raise RuntimeError("nucleus sampler failed")
@@ -137,18 +148,30 @@ def main():
     ap.add_argument("--param", required=True, help="parameter dictionary")
     ap.add_argument("--first-id", type=int, required=True)
     ap.add_argument("--n", type=int, required=True, help="number of event ids")
-    ap.add_argument("--chunk", type=int, default=5000)
+    ap.add_argument(
+        "--chunk",
+        type=int,
+        default=1000,
+        help="events per sampler/TRENTo call.  At most 2000: the sampler "
+        "records each configuration's deformation in HDF5 attributes, which "
+        "hold 64 kB")
     ap.add_argument("--out", required=True, help="output .npz")
     ap.add_argument("--trento", help="TRENTo binary (default: the image's)")
     ap.add_argument("--sampler",
                     help="build_isobars.py (default: the image's)")
     ap.add_argument("--workdir", help="scratch directory (default: a temp dir)")
+    ap.add_argument("--processes",
+                    type=int,
+                    default=1,
+                    help="cores the nucleus sampler may use (default 1)")
     ap.add_argument("--framework",
                     default=REPO,
                     help="framework root holding generate_jobs.py and the "
                     "compiled codes (default: where this script lives)")
     args = ap.parse_args()
 
+    if not 1 <= args.chunk <= 2000:
+        ap.error("--chunk must be between 1 and 2000")
     t0 = time.time()
     workdir = args.workdir or tempfile.mkdtemp(prefix="draw_events_")
     os.makedirs(workdir, exist_ok=True)
@@ -159,7 +182,8 @@ def main():
     for start in range(args.first_id, args.first_id + args.n, args.chunk):
         n = min(args.chunk, args.first_id + args.n - start)
         *arrays, b_max, master_seed = run_batch(trento_dir, start, n,
-                                                args.trento, args.sampler)
+                                                args.trento, args.sampler,
+                                                args.processes)
         parts.append(arrays)
     b, npart, mult, entropy = (np.concatenate(x) for x in zip(*parts))
     np.savez_compressed(args.out,
