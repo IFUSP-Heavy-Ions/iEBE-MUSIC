@@ -44,20 +44,22 @@ clone_repo_at_tag() {
 
 # download Isobar-Sampler (used by TRENTo initial conditions)
 # QGP-USP = Public_Release bc586de + deterministic (Philox) nucleon seeds, the
-# 2.8x faster sampler and event-by-event beta2/beta3/gamma fluctuations.
+# 2.8x faster sampler and event-by-event beta2/beta3/gamma fluctuations; the
+# pin adds configuration_stride (one call for the nuclei of many events).
 clone_repo_at_commit \
   https://github.com/mluzum/Isobar-Sampler.git \
   isobar_sampler_code \
-  67b804a17f334b1ccd69cd477d90ab94ddd24bf1 \
+  3ff2907c7bc8d1eeeb823df5fec419c7d30452ba \
   QGP-USP
 
 # download TRENTo (used by TRENTo initial conditions)
 # QGP-USP = Duke-QCD/trento 10960b2 + the nucleon-configuration interface
-# (the same commit that was previously fetched from jppicchetti/trento_sync)
+# (4837013, previously fetched from jppicchetti/trento_sync); the pin adds
+# --first-event-id, a batch mode that reproduces single-event runs exactly.
 clone_repo_at_commit \
   https://github.com/IFUSP-Heavy-Ions/trento.git \
   trento_code \
-  48370133999300b10d0a1b061c8b9c365e3ee4f2 \
+  54aa4617f81c25aed0ed99e92de361de3dd25f26 \
   QGP-USP
 
 # download 3DMCGlauber
