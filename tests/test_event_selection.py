@@ -52,6 +52,18 @@ for lo, hi in zip(edges[:-1], edges[1:]):
 # the weighted count reproduces the number of events in every bin
 assert np.allclose(np.histogram(c[acc], edges, weights=w[acc])[0], np.histogram(c, edges)[0], rtol=0.05)
 
+# 4b. beyond the last edge: the last bin's acceptance unless a cut is asked for
+cfg_floor = {k: v for k, v in cfg.items() if k != "outside"}
+assert np.allclose(es.acceptance([69.0, 71.0, 99.0], cfg_floor), 0.2 / 30)
+assert np.all(es.acceptance([71.0, 99.0], cfg) == 0.0)
+assert es.covered_range(cfg) == [0.0, 70.0]
+assert es.covered_range(cfg_floor) == [0.0, 100.0]
+assert es.covered_range({"mode": "none"}) == [0.0, 100.0]
+# with every region represented the weights add up to the collided events
+pf = es.acceptance(c, cfg_floor)
+tot = np.sum(1 / pf[(uu < pf) & coll])
+assert abs(tot / coll.sum() - 1) < 0.03, tot / coll.sum()
+
 # 5. an explicit curve, and two design points sharing the draw
 cfg2 = {"mode": "curve", "curve": [[0, 1.0], [1, 1.0], [10, 0.05], [100, 0.05]], "calibration": table}
 pA = es.acceptance(c, cfg2)

@@ -88,8 +88,23 @@ defaults — prefer those over guessing flags.
   The batch paths (`configuration_stride` in the sampler, `--first-event-id` in TRENTo) exist to
   reproduce single-event runs digit for digit; `tests/sampler_stride.sh` and
   `tests/trento_event_id_mode.sh` check that and must be re-run for a new system or a new TRENTo.
-  The sampler costs 0.1 CPU-s per A = 96 nucleus and dominates phase 1; one call holds at most
-  ~2000 configurations (HDF5 attribute limit).
+  Phase 1 costs ~13 ms per event (A = 96; the sampler deforms a nucleus in ~5 ms since its
+  deformation step was vectorised, bit-identically -- `tests/test_deform_vectorized.py` in the
+  sampler repo); one sampler call holds at most ~2000 configurations (HDF5 attribute limit).
+  `docs/importance_sampling.md` is the user-facing description.
+- **In an importance-sampled campaign the minimum-bias denominator is in the selection summary,
+  not in the event files.** `events_drawn.csv` then lists only accepted events, and `sum(w)`
+  estimates the collided count only inside the covered centrality range; `n_collided` in
+  `selection_dpNNNN.json` (copied to root attributes of the merged file by
+  `merge_dp_h5.py --selection`) is the number to normalise percentiles with. Beyond the last
+  bin edge the acceptance defaults to the last bin's, not zero, so nothing is unrepresented
+  unless a campaign sets `"outside": 0` on purpose.
+- **An accepted event with no h5 is either empty or lost, and the two need opposite
+  treatment.** The driver now writes `status = no_surface` in `events_drawn.csv` when the
+  freeze-out surface is empty (a real collision with no particles; count it, with its weight)
+  and `hydro_failed` when MUSIC did not finish; before, both stayed `ok` and were only
+  distinguishable from a lost job by elimination. `merge_dp_h5.py --selection` turns that into
+  a `status` column (`ok` / `no_surface` / `failed`) in the design point's selection list.
 - **Every modified physics code lives on a fork, pinned by commit in `codes/get_code_packages.sh`.**
   Nothing is patched or overlaid during the build. The sampler is `mluzum/Isobar-Sampler`; TRENTo,
   MUSIC, iSS and the toolkit are under `github.com/IFUSP-Heavy-Ions`, each on a branch `QGP-USP`.

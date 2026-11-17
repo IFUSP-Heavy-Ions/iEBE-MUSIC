@@ -77,6 +77,7 @@ sees the same nuclei.
 |---|---|
 | [`campaigns/`](campaigns/) | the record of each campaign that was run: code revisions, container, design, seeds — enough to reproduce it |
 | [`docs/chain.md`](docs/chain.md) | where each component comes from, how the image is built and published, how to upgrade a component and validate the result |
+| [`docs/importance_sampling.md`](docs/importance_sampling.md) | simulating a weighted subset of events, for good statistics in narrow centrality classes |
 | [`docs/osg_operations.md`](docs/osg_operations.md) | running at scale on the Open Science Grid: what has gone wrong |
 | [`docs/numerical_precision.md`](docs/numerical_precision.md) | grid, time-step and sampling convergence of the chain |
 | [`docs/deformation_sampling.md`](docs/deformation_sampling.md) | parameterization of fluctuating nuclear deformation |

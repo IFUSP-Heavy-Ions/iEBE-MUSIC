@@ -6,8 +6,8 @@ calibrates the estimator-to-centrality map on them, applies the campaign's
 event selection (codes/event_selection.py) and writes
 
     <out>.csv   the accepted events, one per line, in event-id order:
-                event_id, weight, p_acc, centrality, estimator.  This is the
-                list the full chain runs from (IEBE_EVENT_LIST)
+                event_id, weight, p_acc, centrality, estimator, u.  This is
+                the list the full chain runs from (IEBE_EVENT_LIST)
     <out>.npz   the same plus u and b, and the calibration table
     <out>.json  what is needed to interpret them: the selection, the master
                 seed, how many events were drawn and how many collided, the
@@ -100,14 +100,25 @@ def main():
     # The list the full chain runs from (IEBE_EVENT_LIST): one line per
     # accepted event, in event-id order.  A job owns a range of its lines.
     with open(args.out + ".csv", "w") as fh:
-        fh.write("event_id,weight,p_acc,centrality,estimator\n")
+        fh.write("event_id,weight,p_acc,centrality,estimator,u\n")
         for row in zip(ids[accepted], weight, p[accepted], cent[accepted],
-                       est[accepted]):
-            fh.write("{:d},{:.10g},{:.10g},{:.6f},{:.10e}\n".format(*row))
+                       est[accepted], u[accepted]):
+            fh.write("{:d},{:.10g},{:.10g},{:.6f},{:.10e},{:.10f}\n".format(
+                *row))
 
     summary = {
+        "format_version": 1,
         "selection": {k: v
                       for k, v in config.items() if k != "calibration"},
+        # where events can be accepted at all; [0, 100] unless there is a cut
+        "covered_centrality": es.covered_range(config),
+        # the estimator-to-centrality table is this design point's own
+        "calibration": "own phase-1 sample of this design point",
+        # the same number for the same event id at every design point
+        "uniform": "numpy Philox(key=master_seed, counter=[event_id, "
+                   "0x53454C45, 0, 0]).random(); accepted if u < p_acc",
+        "weight": "1/p_acc, not normalised: the sum of weights estimates the "
+                  "number of collided events in the covered range",
         "estimator": args.estimator,
         "coverage": args.coverage,
         "master_seed": master_seed,
@@ -115,6 +126,7 @@ def main():
         "event_ids": [int(ids[0]), int(ids[-1])],
         "n_drawn": int(len(ids)),
         "n_collided": int(np.sum(est > 0)),
+        "n_no_collision": int(np.sum(est <= 0)),
         "n_accepted": int(accepted.sum()),
         "effective_size": es.effective_size(weight),
         "sum_of_weights": float(weight.sum()),
@@ -133,6 +145,13 @@ def main():
                 "p_acc": float(weight[m].size and 1.0 / weight[m].mean())
             })
         summary["bins"] = rows
+        m = (c_acc >= edges[-1]) | (c_acc < edges[0])
+        summary["outside_bins"] = {
+            "accepted": int(m.sum()),
+            "drawn": int(np.sum(((cent >= edges[-1]) | (cent < edges[0]))
+                                & (est > 0))),
+            "p_acc": float(weight[m].size and 1.0 / weight[m].mean())
+        }
     with open(args.out + ".json", "w") as fh:
         json.dump(summary, fh, indent=1)
     print("{}: drew {}, collided {}, accepted {} ({:.2f}%), effective size {:.0f}"
@@ -144,6 +163,10 @@ def main():
         print("  {:>5g}-{:<5g}%  accepted {:6d} of {:7d} drawn   p = {:.4f}".
               format(r["bin"][0], r["bin"][1], r["accepted"], r["drawn"],
                      r["p_acc"]))
+    if "outside_bins" in summary:
+        r = summary["outside_bins"]
+        print("  outside the bins  accepted {:6d} of {:7d} drawn   p = {:.4f}".
+              format(r["accepted"], r["drawn"], r["p_acc"]))
 
 
 if __name__ == "__main__":

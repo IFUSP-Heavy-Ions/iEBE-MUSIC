@@ -27,12 +27,19 @@ Configuration (a plain dict, e.g. `event_selection_dict` in a parameter file):
     {"mode": "bins",                                  # ~equal accepted events per bin
      "centrality_bins": [0, 0.2, 1, 2, 5, 10, 20, 40, 70],
      "min_acceptance": 0.02,                          # floor inside the bins
-     "outside": 0.0}                                  # beyond the last edge: 0 = cut
+     "outside": 0.02}                                 # beyond the last edge
     {"mode": "curve",                                 # explicit P(centrality %)
      "curve": [[0, 1.0], [1, 1.0], [10, 0.05], [100, 0.05]]}
 
 plus, for either active mode, the calibration that turns the estimator into a
 centrality percentile (see `calibrate`).
+
+`outside` defaults to the acceptance of the last bin, so that every part of
+the cross section stays represented and centrality percentiles computed from
+the weighted sample are unbiased everywhere.  `"outside": 0` is a hard cut:
+cheaper, but the events beyond it do not exist in the output, and classes
+defined on final-state multiplicity are biased within a few percent of the
+cut, because the initial and the final ordering of events are not the same.
 """
 
 import numpy as np
@@ -111,11 +118,28 @@ def acceptance(centrality_pct, config):
                       len(p_bin) - 1)
         p = p_bin[idx]
         outside = (c < edges[0]) | (c >= edges[-1])
-        return np.where(outside, float(config.get("outside", 0.0)), p)
+        p_outside = config.get("outside")
+        if p_outside is None:
+            p_outside = p_bin[-1]
+        return np.where(outside, float(p_outside), p)
     if mode == "curve":
         pts = np.asarray(config["curve"], dtype=float)
         return np.interp(c, pts[:, 0], pts[:, 1])
     raise ValueError("unknown event selection mode: {}".format(mode))
+
+
+def covered_range(config):
+    """[low, high] centrality percent in which events can be accepted at all."""
+    mode = config.get("mode", "none")
+    grid = np.linspace(0.0, 100.0, 100001)
+    grid = grid[:-1]  # 100 is where events that never collide are put
+    ok = np.nonzero(acceptance(grid, config) > 0.0)[0]
+    if mode == "none" or len(ok) == len(grid):
+        return [0.0, 100.0]
+    if len(ok) == 0:
+        return [0.0, 0.0]
+    step = grid[1] - grid[0]
+    return [float(round(grid[ok[0]], 3)), float(round(grid[ok[-1]] + step, 3))]
 
 
 def decide(event_id, estimator, config, master_seed):

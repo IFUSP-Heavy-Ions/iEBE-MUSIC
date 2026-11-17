@@ -916,6 +916,39 @@ def record_drawn_event(final_results_folder,
     os.replace(tmp_path, csv_path)
 
 
+def mark_drawn_event(final_results_folder, event_id, status):
+    """Record in events_drawn.csv how far an event got after TRENTo.
+
+    `record_drawn_event` writes "ok" once the initial condition exists.  An
+    event that then leaves no spvn_results is otherwise indistinguishable from
+    one whose job was lost, and the two need opposite treatment: an empty
+    freeze-out surface ("no_surface") is a real collision that produced
+    nothing and counts as an event with no particles, while a failure is to be
+    re-run.
+    """
+    csv_path = path.join(final_results_folder, "events_drawn.csv")
+    try:
+        with open(csv_path, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            columns = reader.fieldnames
+            rows = list(reader)
+    except OSError:
+        return
+    found = False
+    for row in rows:
+        if row.get("event_id") == str(int(event_id)):
+            row["status"] = status
+            found = True
+    if not found or not columns:
+        return
+    tmp_path = csv_path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=columns)
+        writer.writeheader()
+        writer.writerows(rows)
+    os.replace(tmp_path, csv_path)
+
+
 def connect_trento_event(res_path, initial_type, filename, free_stream_tau,
                          grid_max, grid_step):
     if initial_type == "TRENTo":
@@ -1797,7 +1830,7 @@ def zip_results_into_hdf5(final_results_folder, event_id, para_dict,
             # importance sampling: <O> = sum(w O)/sum(w) over the events of a
             # design point.  Absent means 1 (every event was simulated).
             gtemp.attrs.create("event_weight", float(selected["weight"]))
-            for key in ("p_acc", "centrality"):
+            for key in ("p_acc", "centrality", "estimator"):
                 if selected.get(key):
                     gtemp.attrs.create("selection_" + key,
                                        float(selected[key]))
@@ -2001,6 +2034,8 @@ def main(para_dict_):
             print("\U000026D4  {} did not finsh properly, skipped.".format(
                 hydro_folder_name),
                   flush=True)
+            if str(event_id).isdigit():
+                mark_drawn_event(final_results_folder, event_id, "hydro_failed")
             exitErrorTrigger = True
             continue
 
@@ -2059,6 +2094,13 @@ def main(para_dict_):
             final_results_folder, hydro_folder_name, nUrQMDFolder,
             para_dict_['afterburner_type'])
         if not status_success:
+            # the fireball never reached the freeze-out temperature: a real
+            # collision with nothing to particlize
+            print("\U000026A0  event {}: empty freeze-out surface, "
+                  "skipped.".format(event_id),
+                  flush=True)
+            if str(event_id).isdigit():
+                mark_drawn_event(final_results_folder, event_id, "no_surface")
             exitErrorTrigger = True
             continue
 
