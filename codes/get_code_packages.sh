@@ -49,7 +49,7 @@ clone_repo_at_tag() {
 clone_repo_at_commit \
   https://github.com/mluzum/Isobar-Sampler.git \
   isobar_sampler_code \
-  3ff2907c7bc8d1eeeb823df5fec419c7d30452ba \
+  b5eab9313f9884ddc97c4d0bcab7152e0345c25f \
   QGP-USP
 
 # download TRENTo (used by TRENTo initial conditions)
