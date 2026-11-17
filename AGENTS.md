@@ -100,7 +100,7 @@ defaults — prefer those over guessing flags.
   bin edge the acceptance defaults to the last bin's, not zero, so nothing is unrepresented
   unless a campaign sets `"outside": 0` on purpose.
 - **A selection needs the coverage whenever `b_max` cuts into the collision range.** Centrality
-  is a fraction of the whole inelastic cross section; zr96-c2's `b_max` holds only 83-90 % of it
+  is a fraction of the whole inelastic cross section; zr96-c2's `b_max` holds only 74-94 % of it, depending on the design point
   (`frac_below_bmax` in the `scripts/cross_section` table). Selecting with coverage 1 there puts
   every percentile too high by 1/coverage -- this happened in the first grid test and was caught
   by the analysis adapter. `select_events.py` now refuses when draws near `b_max` still collide

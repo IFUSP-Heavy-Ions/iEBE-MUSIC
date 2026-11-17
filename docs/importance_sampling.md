@@ -132,7 +132,7 @@ only drawn up to `b_max`. There are two consistent ways to set up a campaign:
   With importance sampling this costs little: the extra peripheral events are
   rejected in phase 1, at milliseconds each.
 * **`b_max` inside the collision range**, as in zr96-c2, whose `b_max` holds
-  83–90 % of the cross section. The selection then needs the *coverage*, the
+  74–94 % of the cross section, depending on the design point. The selection then needs the *coverage*, the
   fraction of the inelastic cross section inside `b_max`, which the draws
   cannot measure themselves. `scripts/cross_section/` computes it per design
   point (`frac_below_bmax`):
