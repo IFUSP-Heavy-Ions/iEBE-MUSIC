@@ -118,11 +118,38 @@ level.
 Example, 200,000 draws at one A = 96 design point with bins
 `[0, 0.5, 1, 2, 5, 10, 20, 40, 70]` and `min_acceptance` 0.02: 8,823 events
 simulated (4.4 %), 895–1,135 per bin, against 188,416 for the same statistics
-in the 0–0.5 % bin without selection.
+in the 0–0.5 % bin without selection. (Those counts were made on the sample's
+own percentiles; with the coverage of that design point, 0.900, the same
+selection keeps 9,424 events, about 1,050 per bin.)
 
-`b_max` remains a per-campaign choice in the parameter dictionary. If it cuts
-into the range where nuclei still collide, pass the fraction of the inelastic
-cross section it covers to `select_events.py --coverage`.
+### `b_max` and the coverage
+
+Centrality is a fraction of the whole inelastic cross section, but events are
+only drawn up to `b_max`. There are two consistent ways to set up a campaign:
+
+* **`b_max` beyond the collision range** (collisions at `b_max` are
+  negligible). The draws then cover everything and nothing else is needed.
+  With importance sampling this costs little: the extra peripheral events are
+  rejected in phase 1, at milliseconds each.
+* **`b_max` inside the collision range**, as in zr96-c2, whose `b_max` holds
+  83–90 % of the cross section. The selection then needs the *coverage*, the
+  fraction of the inelastic cross section inside `b_max`, which the draws
+  cannot measure themselves. `scripts/cross_section/` computes it per design
+  point (`frac_below_bmax`):
+
+  ```bash
+  python3 scripts/select_events.py ... --xsec-table summary_<campaign>.csv --dp N
+  ```
+
+  or pass the number with `--coverage`. Without it every percentile would be
+  too high by 1/coverage, so `select_events.py` refuses to run when more than
+  1 % of the draws near `b_max` still collide and no coverage is given. All
+  centralities in the output are then on the true scale, and
+  `covered_centrality` ends at 100 × coverage.
+
+A frozen table (`--calibration`) must have been built with the same coverage;
+the summary records both (`coverage_source`, `calibration_source`,
+`calibration`).
 
 ## What the results carry
 

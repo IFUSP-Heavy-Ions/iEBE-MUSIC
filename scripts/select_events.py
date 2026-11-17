@@ -25,7 +25,9 @@ codes/event_selection.py, without the calibration (it is computed here), e.g.
 """
 
 import argparse
+import csv
 import glob
+import hashlib
 import json
 import os
 import sys
@@ -39,6 +41,79 @@ sys.path.insert(
 import event_selection as es  # noqa: E402
 
 
+def sha256(name):
+    h = hashlib.sha256()
+    with open(name, "rb") as fh:
+        for block in iter(lambda: fh.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def resolve_coverage(args, ids, est, b, b_max):
+    """Fraction of the inelastic cross section inside b_max, and where from.
+
+    Centrality is a fraction of the *whole* inelastic cross section, but the
+    draws only reach b_max.  If collisions still happen at b_max the sample
+    misses the most peripheral ones, and a selection that ignores that puts
+    every percentile too high by 1/coverage.  The draws cannot measure what
+    lies beyond b_max, so the number has to come from outside; what they can
+    do is show that it is needed.
+    """
+    n = len(ids)
+    hit = est > 0
+    # b^2 is uniform up to b_max^2, so the outer shell b > x b_max holds
+    # n (1 - x^2) draws; b is recorded for the ones that collided
+    x = 0.95
+    p_edge = float(np.sum(hit & (b > x * b_max)) / (n * (1 - x * x)))
+    if args.xsec_table:
+        if args.coverage is not None:
+            sys.exit("give --coverage or --xsec-table, not both")
+        if args.dp is None:
+            sys.exit("--xsec-table needs --dp")
+        row = None
+        with open(args.xsec_table, newline="") as fh:
+            for r in csv.DictReader(fh):
+                if int(r["dp"]) == args.dp:
+                    row = r
+                    break
+        if row is None:
+            sys.exit("design point {} is not in {}".format(
+                args.dp, args.xsec_table))
+        if abs(float(row["b_max"]) - b_max) > 1e-6 * b_max:
+            sys.exit("b_max of the draws ({}) is not the table's ({})".format(
+                b_max, row["b_max"]))
+        coverage = float(row["frac_below_bmax"])
+        source = "frac_below_bmax of {} (sha256 {}), dp {}".format(
+            os.path.basename(args.xsec_table), sha256(args.xsec_table),
+            args.dp)
+        # the table also predicts how many draws collide; a disagreement means
+        # the table belongs to other nuclei or another cross section
+        if "p_hit_below_bmax" in row:
+            p_tab = float(row["p_hit_below_bmax"])
+            p_obs = float(np.mean(hit))
+            err = np.sqrt(max(p_tab * (1 - p_tab), 1e-12) / n)
+            if abs(p_obs - p_tab) > 5 * err + 1e-3:
+                sys.exit("collided fraction of the draws {:.4f} disagrees "
+                         "with the table's {:.4f}".format(p_obs, p_tab))
+    elif args.coverage is not None:
+        coverage = args.coverage
+        source = "given on the command line"
+    else:
+        if p_edge > 0.01:
+            sys.exit(
+                "b_max cuts into the collision range: {:.0f}% of the draws "
+                "with b > {} b_max still collide.  The coverage (fraction of "
+                "the inelastic cross section inside b_max) is needed: "
+                "--xsec-table/--dp from scripts/cross_section, or --coverage."
+                .format(100 * p_edge, x))
+        coverage = 1.0
+        source = ("assumed 1: {:.2g} of the draws with b > {} b_max collide"
+                  .format(p_edge, x))
+    if not 0.0 < coverage <= 1.0:
+        sys.exit("coverage must be in (0, 1]")
+    return coverage, source
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--draws", required=True, help="glob of draw tables")
@@ -48,9 +123,15 @@ def main():
     ap.add_argument(
         "--coverage",
         type=float,
-        default=1.0,
-        help="fraction of the inelastic cross section the drawn sample covers "
-        "(below 1 only if b_max cuts into the range where nuclei still collide)")
+        help="fraction of the inelastic cross section inside b_max.  Needed "
+        "whenever b_max cuts into the range where nuclei still collide; "
+        "centralities are wrong by 1/coverage without it.  Give it here, or "
+        "let --xsec-table supply it")
+    ap.add_argument(
+        "--xsec-table",
+        help="summary_<campaign>.csv of scripts/cross_section: the coverage "
+        "is read from its frac_below_bmax column, row --dp")
+    ap.add_argument("--dp", type=int, help="design point, for --xsec-table")
     ap.add_argument(
         "--calibration",
         help="take the estimator-to-centrality table from this earlier "
@@ -76,16 +157,34 @@ def main():
         sys.exit("the draw tables disagree on master_seed or b_max")
     master_seed, b_max = seeds.pop(), b_maxes.pop()
 
+    coverage, coverage_source = resolve_coverage(args, ids, est, b, b_max)
+    args.coverage = coverage
+
     with open(args.selection) as fh:
         config = json.load(fh)
     if args.calibration:
         ref = np.load(args.calibration)
         table = {"percent": ref["calibration_percent"].tolist(),
                  "estimator": ref["calibration_estimator"].tolist()}
-        calibration_source = "table of " + os.path.basename(args.calibration)
+        calibration = {
+            "file": os.path.basename(args.calibration),
+            "sha256": sha256(args.calibration),
+            "n_drawn": int(ref["n_drawn"]) if "n_drawn" in ref else None,
+            "coverage": float(ref["coverage"]) if "coverage" in ref else None,
+        }
+        # A table built on another coverage puts the percentiles on another
+        # scale: the same mistake as a wrong --coverage.
+        if calibration["coverage"] is None:
+            sys.exit("{} does not record the coverage it was built with; "
+                     "redo that selection first".format(args.calibration))
+        if abs(calibration["coverage"] - coverage) > 1e-9:
+            sys.exit("the calibration table assumes coverage {}, this "
+                     "selection {}".format(calibration["coverage"], coverage))
+        calibration_source = "external"
     else:
-        table = es.calibrate(est, coverage=args.coverage)
-        calibration_source = "own phase-1 sample of this design point"
+        table = es.calibrate(est, coverage=coverage)
+        calibration = {"n_drawn": int(len(ids)), "coverage": coverage}
+        calibration_source = "own"
     config = dict(config, calibration=table)
     cent = es.centrality(est, table)
     p = es.acceptance(cent, config)
@@ -107,6 +206,8 @@ def main():
                         centrality=cent[accepted],
                         estimator=est[accepted],
                         b=b[accepted],
+                        n_drawn=len(ids),
+                        coverage=coverage,
                         calibration_percent=np.array(table["percent"]),
                         calibration_estimator=np.array(table["estimator"]))
 
@@ -129,8 +230,11 @@ def main():
                       for k, v in config.items() if k != "calibration"},
         # where events can be accepted at all; [0, 100] unless there is a cut
         "covered_centrality": covered,
-        # where the estimator-to-centrality table comes from
-        "calibration": calibration_source,
+        # the estimator-to-centrality table: "own" (computed from these
+        # draws) or "external" (a frozen table from an earlier selection)
+        "calibration_source": calibration_source,
+        "calibration": calibration,
+        "coverage_source": coverage_source,
         # the same number for the same event id at every design point
         "uniform": "numpy Philox(key=master_seed, counter=[event_id, "
                    "0x53454C45, 0, 0]).random(); accepted if u < p_acc",

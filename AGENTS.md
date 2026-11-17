@@ -99,6 +99,13 @@ defaults — prefer those over guessing flags.
   `merge_dp_h5.py --selection`) is the number to normalise percentiles with. Beyond the last
   bin edge the acceptance defaults to the last bin's, not zero, so nothing is unrepresented
   unless a campaign sets `"outside": 0` on purpose.
+- **A selection needs the coverage whenever `b_max` cuts into the collision range.** Centrality
+  is a fraction of the whole inelastic cross section; zr96-c2's `b_max` holds only 83-90 % of it
+  (`frac_below_bmax` in the `scripts/cross_section` table). Selecting with coverage 1 there puts
+  every percentile too high by 1/coverage -- this happened in the first grid test and was caught
+  by the analysis adapter. `select_events.py` now refuses when draws near `b_max` still collide
+  and no `--xsec-table`/`--coverage` is given. For a new campaign the simpler choice is a
+  `b_max` beyond the collision range: importance sampling makes the extra peripheral draws free.
 - **An accepted event with no h5 is either empty or lost, and the two need opposite
   treatment.** The driver now writes `status = no_surface` in `events_drawn.csv` when the
   freeze-out surface is empty (a real collision with no particles; count it, with its weight)
