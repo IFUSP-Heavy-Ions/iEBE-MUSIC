@@ -106,12 +106,16 @@ def main():
             fh.write("{:d},{:.10g},{:.10g},{:.6f},{:.10e},{:.10f}\n".format(
                 *row))
 
+    # Percent of the inelastic cross section, like every centrality here; the
+    # drawn sample itself ends at 100 * coverage.
+    covered = es.covered_range(config)
+    covered[1] = min(covered[1], 100.0 * args.coverage)
     summary = {
         "format_version": 1,
         "selection": {k: v
                       for k, v in config.items() if k != "calibration"},
         # where events can be accepted at all; [0, 100] unless there is a cut
-        "covered_centrality": es.covered_range(config),
+        "covered_centrality": covered,
         # the estimator-to-centrality table is this design point's own
         "calibration": "own phase-1 sample of this design point",
         # the same number for the same event id at every design point
