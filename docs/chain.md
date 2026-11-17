@@ -111,6 +111,9 @@ HEAD) *and* include the md5, because two builds can share a SHA.
 
 The campaign-2 image is `iebe-music_slim_17ae5b4_f5242628.sif`
 (`/data/mluzum/iebe-music_slim_17ae5b4_f5242628.sif` locally).
+The image of framework revision `6604e5f` (importance sampling, faster nucleus
+sampler; same physics, reference events bit-identical to campaign 2) is
+`iebe-music_slim_6604e5f_2271081a.sif`, md5 `2271081afc8156eb530c732d53133884`.
 
 ## 4. How a run is made
 

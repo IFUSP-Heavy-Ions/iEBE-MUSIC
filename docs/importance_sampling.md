@@ -64,6 +64,11 @@ point's own draws, applies the selection, and writes
 
 The full minimum-bias record is not kept; it regenerates from the event ids.
 
+By default the centrality table is recomputed from whatever draws are given.
+To add events to a design point later without changing any earlier decision,
+freeze it: `select_events.py --calibration selection_dp0001.npz` reuses the
+table of an earlier selection (the summary records which).
+
 **Phase 2 — simulate the list.** Stage as usual, pointing at the lists:
 
 ```bash
@@ -74,6 +79,14 @@ Each design point gets as many jobs as its list needs; a job owns *positions*
 of the list (`IEBE_EVENT_LIST`), while every file is still named by event id.
 The driver checks that the multiplicity it regenerates is the one the event was
 selected on (`selection_check` in `events_drawn.csv`).
+
+This path was run end to end on the OSPool on 2026-11-17 (design point 583 of
+zr96-c2, 13 accepted events in three jobs at three sites, image
+`iebe-music_slim_6604e5f_2271081a.sif`): every event passed its
+`selection_check`; eight were bit-identical to the same events run locally and
+the five that ran on different hardware differed by 1e-9 in initial
+multiplicity and by less than 0.1 % in pion yield, the usual cross-machine
+level.
 
 ## Choosing the selection
 

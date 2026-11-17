@@ -51,6 +51,12 @@ def main():
         default=1.0,
         help="fraction of the inelastic cross section the drawn sample covers "
         "(below 1 only if b_max cuts into the range where nuclei still collide)")
+    ap.add_argument(
+        "--calibration",
+        help="take the estimator-to-centrality table from this earlier "
+        "<out>.npz instead of computing it from --draws.  A frozen table "
+        "keeps earlier decisions unchanged when more events are drawn later "
+        "(an augmentation batch), and lets design points share one table")
     args = ap.parse_args()
 
     files = sorted(glob.glob(args.draws))
@@ -72,7 +78,14 @@ def main():
 
     with open(args.selection) as fh:
         config = json.load(fh)
-    table = es.calibrate(est, coverage=args.coverage)
+    if args.calibration:
+        ref = np.load(args.calibration)
+        table = {"percent": ref["calibration_percent"].tolist(),
+                 "estimator": ref["calibration_estimator"].tolist()}
+        calibration_source = "table of " + os.path.basename(args.calibration)
+    else:
+        table = es.calibrate(est, coverage=args.coverage)
+        calibration_source = "own phase-1 sample of this design point"
     config = dict(config, calibration=table)
     cent = es.centrality(est, table)
     p = es.acceptance(cent, config)
@@ -116,8 +129,8 @@ def main():
                       for k, v in config.items() if k != "calibration"},
         # where events can be accepted at all; [0, 100] unless there is a cut
         "covered_centrality": covered,
-        # the estimator-to-centrality table is this design point's own
-        "calibration": "own phase-1 sample of this design point",
+        # where the estimator-to-centrality table comes from
+        "calibration": calibration_source,
         # the same number for the same event id at every design point
         "uniform": "numpy Philox(key=master_seed, counter=[event_id, "
                    "0x53454C45, 0, 0]).random(); accepted if u < p_acc",
