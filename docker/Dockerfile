@@ -133,16 +133,16 @@ ENV HOME /opt/
 #              forks, and the framework is fetched from the group organization.
 #              Earlier pins on this list were fetched from github.com/mluzum/iEBE-MUSIC,
 #              where they remain.)
-#   b2e0a22 = "Pin the sampler and TRENTo that can draw events in batches"
+#   6604e5f = "Pin the sampler with the vectorised deformation (b5eab93)"
 #             (importance sampling: phase-1 drawing and selection, event-list
 #              mode in the driver; single-event runs are unchanged)
 RUN cd ${HOME} && \
     mkdir iEBE-MUSIC && cd iEBE-MUSIC && \
     git init -q . && \
     git remote add origin https://github.com/IFUSP-Heavy-Ions/iEBE-MUSIC.git && \
-    git fetch -q --depth=1 origin b2e0a226dc76c5f4414fdb2edfd56d391b12e0e8 && \
+    git fetch -q --depth=1 origin 6604e5fb77560b8500d911ed8b7f7ea04f2961e8 && \
     git checkout -q FETCH_HEAD && \
-    test "$(git rev-parse HEAD)" = "b2e0a226dc76c5f4414fdb2edfd56d391b12e0e8" && \
+    test "$(git rev-parse HEAD)" = "6604e5fb77560b8500d911ed8b7f7ea04f2961e8" && \
     cd codes && \
     bash get_code_packages.sh && \
     ./compile_code_packages.sh && \
