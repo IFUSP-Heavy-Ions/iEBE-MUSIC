@@ -81,11 +81,11 @@ The driver checks that the multiplicity it regenerates is the one the event was
 selected on (`selection_check` in `events_drawn.csv`).
 
 This path was run end to end on the OSPool on 2026-11-17 (design point 583 of
-zr96-c2, 13 accepted events in three jobs at three sites, image
-`iebe-music_slim_6604e5f_2271081a.sif`): every event passed its
-`selection_check`; eight were bit-identical to the same events run locally and
-the five that ran on different hardware differed by 1e-9 in initial
-multiplicity and by less than 0.1 % in pion yield, the usual cross-machine
+zr96-c2, image `iebe-music_slim_6604e5f_2271081a.sif`): two runs of 13 and 14
+accepted events, three jobs each, at six sites. Every event passed its
+`selection_check`. Events that landed on hardware like the local host's were
+bit-identical to local runs (8 of 27); the others differed by 1e-9 to 1e-8 in
+initial multiplicity and by 0.05 % (rms, 0.1 % at most) in pion yield, the usual cross-machine
 level.
 
 ## Choosing the selection
