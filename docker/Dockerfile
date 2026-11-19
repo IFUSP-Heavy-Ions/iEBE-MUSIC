@@ -139,13 +139,16 @@ ENV HOME /opt/
 #   6604e5f = "Pin the sampler with the vectorised deformation (b5eab93)"
 #             (selection records for the analysis; the sampler deforms a
 #              nucleus 34x faster and gives the same nuclei bit for bit)
+#   40cc4da = "Pin MUSIC with the resummed transport coefficients (f072672)"
+#             (FlagResumTransportCoeff now takes effect; with the default 0
+#              results are bit-identical to the pins before)
 RUN cd ${HOME} && \
     mkdir iEBE-MUSIC && cd iEBE-MUSIC && \
     git init -q . && \
     git remote add origin https://github.com/IFUSP-Heavy-Ions/iEBE-MUSIC.git && \
-    git fetch -q --depth=1 origin 6604e5fb77560b8500d911ed8b7f7ea04f2961e8 && \
+    git fetch -q --depth=1 origin 40cc4da089a63e6279827bc37651efa824540b2f && \
     git checkout -q FETCH_HEAD && \
-    test "$(git rev-parse HEAD)" = "6604e5fb77560b8500d911ed8b7f7ea04f2961e8" && \
+    test "$(git rev-parse HEAD)" = "40cc4da089a63e6279827bc37651efa824540b2f" && \
     cd codes && \
     bash get_code_packages.sh && \
     ./compile_code_packages.sh && \
