@@ -53,7 +53,7 @@ Three layers, all immutable by construction:
 | `isobar_sampler_code` | `github.com/mluzum/Isobar-Sampler` (`QGP-USP`) | `b5eab93` | deterministic seeds, faster sampler, fluctuating deformation, many events per call, on top of `Public_Release` `bc586de` |
 | `trento_code` | `github.com/IFUSP-Heavy-Ions/trento` (`QGP-USP`) | `54aa461` | nucleon-configuration interface, event-id mode, on top of Duke-QCD `10960b2` |
 | `MUSIC_code` | `github.com/IFUSP-Heavy-Ions/MUSIC` (`QGP-USP`) | `f072672` | resummed transport coefficients (`FlagResumTransportCoeff`, off by default), on top of upstream `XSCAPE` `cfcc264` |
-| `iSS_code` | `github.com/IFUSP-Heavy-Ions/iSS` (`QGP-USP`) | `77d8a3e` | PTB delta f, on top of upstream `XSCAPE` `d242555` |
+| `iSS_code` | `github.com/IFUSP-Heavy-Ions/iSS` (`QGP-USP`) | `bbc4f9e` | PTB delta f and the RTA delta f with τ_R ∝ E^γ (upstream branch `newRTA`), on top of upstream `XSCAPE` `d242555` |
 | `hadronic_afterburner_toolkit_code` | `github.com/IFUSP-Heavy-Ions/hadronic_afterburner_toolkit` (`QGP-USP`) | `d00b6c9` | boost-invariant dN/dy, on top of upstream `2326ba2` |
 | `3dMCGlauber_code` | `github.com/mluzum/3dMCGlauber` | `1d9856c` | (optional backend) |
 | `ipglasma_code` | `github.com/chunshen1987/ipglasma` | `bf92fe1` | (optional backend) |
@@ -176,11 +176,43 @@ user dictionary is merged into it by `dict.update()`. Two consequences:
 - if the chain needs a new knob, add it to the master *and* to `MakeDictionaries.py`,
   then to the generated input files.
 
+### Viscous corrections at particlization (delta f)
+
+Which delta f iSS samples with is set by three `iss_dict` keys:
+
+| model | `bulk_deltaf_kind` | `deltaf_model` | notes |
+|---|---|---|---|
+| 22-moment (Grad) | 20 | 0 | linear |
+| Chapman-Enskog | 21 | 0 | linear |
+| PTB | 21 | 1 | positive by construction |
+| RTA, τ_R ∝ E^γ | 31 | 0 | linear; `deltaf_newRTA_gamma` = γ, 0 ≤ γ ≤ 1.5 (tables at 0, 0.5, 1, 1.5, interpolated); shear and bulk, no conserved charges |
+
+The linear ones are clamped by the sampler to |delta f| ≤ 1. There are two ways
+to run them:
+
+* **One model per event.** Set the keys in `iss_dict`, e.g.
+  `iss_dict['bulk_deltaf_kind'] = 31; iss_dict['deltaf_newRTA_gamma'] = 0.7`,
+  and leave `control_dict['deltaf_models']` out.
+* **Several models on the same hydro surface.**
+  `control_dict['deltaf_models'] = {name: {iSS overrides}}` particlizes every
+  surface once per entry, with the same seeds, into `deltaf_<name>`; each group
+  records its overrides in the attribute `iss_overrides`. An extra model costs
+  30–55 s per event on top of 80–170 s for hydro plus one model (zr96-c2 dp 583),
+  so a scan in γ is about three times cheaper this way than as separate events.
+
+`MakeDictionaries.py` writes either for a whole design:
+`--deltaf-models CE,PTB,RTA050,RTA100` (`RTA<nnn>` is γ = nnn/100 at every
+design point), or a design column `deltaf_newRTA_gamma` for a γ that varies with
+the design point (model name `RTA`; combine with others as
+`--deltaf-models PTB,RTA`; `--deltaf-models none` gives the single flat
+particlization).
+
 ## 5. What comes out, and how it is merged
 
 Per event, `spvn_results_<id>.h5` holds one group per event with the hydro-level
 datasets and one subgroup per delta-f model (`deltaf_Grad22`, `deltaf_CE`,
-`deltaf_PTB`), with attributes `deltaf_models`, `toolkit_npT/pT_min/pT_max`.
+`deltaf_PTB` in zr96-c2), with attributes `deltaf_models`,
+`toolkit_npT/pT_min/pT_max`, and `iss_overrides` on each subgroup.
 Per job, one tarball with 20 event h5 files plus the TRENTo summaries, grid
 extents and `events_drawn_<proc>.csv`.
 
@@ -234,7 +266,7 @@ For each component you bump:
 | TRENTo | everything shifts | normalization, `reduced-thickness`, `fluctuation` (= 1/σ_k²), nucleon width |
 | isobar sampler | nuclear shape, hence all flow | `gamma` is **degrees in the design CSV, radians in the YAML**; `beta_3` sign is a rotation, not a degree of freedom |
 | MUSIC | spectra, v_n, ⟨p_T⟩ | EOS choice; `music_dict` decides the viscosity — the JETSCAPE parametrisation is `T_dependent_Shear_to_S_ratio = 3`; option 7 has no amplitude knob; `FlagResumTransportCoeff = 1` is a different set of equations, not a refinement (⟨p_T⟩ +3 to +14 % at zr96-c2 dp 583) |
-| iSS | yields, delta-f | the MC_sampling 4 sampler clamps linear delta f to [-1,1]; `restrict_deltaf` does nothing there; use `deltaf_model 1` (PTB) if you want positivity |
+| iSS | yields, delta-f | the MC_sampling 4 sampler clamps linear delta f to [-1,1]; `restrict_deltaf` does nothing there; use `deltaf_model 1` (PTB) if you want positivity; `bulk_deltaf_kind 31` (RTA with τ_R ∝ E^γ) is linear too |
 | afterburner | spectra, especially baryons | `decay` vs UrQMD changes the pT grid interpretation downstream |
 | toolkit | every table the analysis reads | pT bins are `pT_min + i·(pT_max-pT_min)/npT`; identified species are flat in *rapidity*, all-charged references are pseudorapidity |
 | free streaming | initial energy/flow | `Initial_profile 92` throws away the flow; 9 keeps the full T^munu |

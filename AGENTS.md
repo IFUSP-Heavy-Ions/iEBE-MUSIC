@@ -219,6 +219,16 @@ defaults — prefer those over guessing flags.
   whose y→η Jacobian gives a ~25 % mid-rapidity dip and a window-dependent "yield". Use
   identified particles in rapidity for the yield. The `_vndata_diff_y_-0.5_0.5` filename
   suffix is hardcoded and stale — the table is filled over `rap_min..rap_max`.
+- **RTA delta f with τ_R ∝ E^γ: `bulk_deltaf_kind 31` + `deltaf_newRTA_gamma`, since iSS pin `bbc4f9e`.**
+  A backport of upstream iSS's branch `newRTA`, which was never merged there and renames the
+  parameter to `deltaf_kind`; the fork keeps `bulk_deltaf_kind`. γ must be in [0, 1.5] (iSS exits
+  otherwise; the tables are at 0, 0.5, 1, 1.5). The tables live in the fork
+  (`iSS_tables/deltaf_tables/newRTA`), not behind a download. Run one γ per event through
+  `iss_dict`, or several on the same surface through `control_dict['deltaf_models']`
+  (`MakeDictionaries.py --deltaf-models ...,RTA050,RTA100`, or a design column
+  `deltaf_newRTA_gamma`); see "Viscous corrections at particlization" in `docs/chain.md`. Model
+  names end up as h5 group names (`deltaf_<name>`), so tell the analysis side which names a
+  campaign uses.
 - **`FlagResumTransportCoeff` works since MUSIC pin `f072672`; before, it was silently ignored.**
   The master has carried the flag since upstream's 2025-01 update, but the chain's MUSIC is the
   `XSCAPE` branch, which split from upstream `main` before the scheme was merged there and does not

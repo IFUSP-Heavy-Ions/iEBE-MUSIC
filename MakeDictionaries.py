@@ -46,6 +46,23 @@ Design-matrix columns (csv.DictReader; every one is required unless noted):
                        user dict is merged with dict.update() and a misspelt key
                        is carried along unused while the master default wins.
     T_freeze           freeze-out temperature [GeV]
+    deltaf_newRTA_gamma  optional; exponent gamma of the energy dependence of
+                       the relaxation time in the RTA delta f of iSS
+                       (bulk_deltaf_kind 31), 0 <= gamma <= 1.5.  With this
+                       column every design point is particlized once, with its
+                       own gamma (model name `RTA`), unless --deltaf-models
+                       says otherwise.
+
+Viscous corrections at particlization (--deltaf-models): every hydro surface
+is particlized once per model, with the same seeds, into the group
+deltaf_<name> of the event file.  Without the option (and without a
+deltaf_newRTA_gamma column) the template's list is used, Grad22,CE,PTB.
+    Grad22, CE, PTB    22-moment, Chapman-Enskog, Pratt-Torrieri-Bernhard
+    RTA                RTA delta f with gamma from the design column
+    RTA<nnn>           RTA delta f with gamma = nnn/100 at every design point,
+                       e.g. RTA000, RTA050, RTA100, RTA150
+    none               one particlization with iss_dict as it is, results at
+                       the top level of the event file
 """
 
 from __future__ import annotations
@@ -54,6 +71,7 @@ import argparse
 import csv
 import math
 import pprint
+import re
 from pathlib import Path
 import runpy
 
@@ -364,6 +382,14 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=
         "Last design-point number to generate, inclusive. Defaults to the final row.",
+    )
+    parser.add_argument(
+        "--deltaf-models",
+        default=None,
+        help="Comma-separated viscous corrections to particlize every surface "
+        "with: Grad22, CE, PTB, RTA (gamma from the design column "
+        "deltaf_newRTA_gamma), RTA<nnn> (gamma = nnn/100), or 'none'. "
+        "Default: the template's list, or RTA if the design has the column.",
     )
     args = parser.parse_args()
     if args.design_flag is not None:
@@ -798,6 +824,76 @@ def write_design_point_file(output_dir: Path, index_one_based: int,
     output_path.chmod(0o755)
 
 
+DELTAF_PRESETS = {
+    "Grad22": {
+        "deltaf_model": 0,
+        "bulk_deltaf_kind": 20
+    },
+    "CE": {
+        "deltaf_model": 0,
+        "bulk_deltaf_kind": 21
+    },
+    "PTB": {
+        "deltaf_model": 1,
+        "bulk_deltaf_kind": 21
+    },
+}
+RTA_GAMMA_MAX = 1.5  # the iSS tables cover gamma = 0, 0.5, 1, 1.5
+
+
+def rta_model(gamma: float) -> dict:
+    if not 0.0 <= gamma <= RTA_GAMMA_MAX:
+        raise ValueError(
+            f"deltaf_newRTA_gamma = {gamma} is outside [0, {RTA_GAMMA_MAX}]")
+    return {
+        "deltaf_model": 0,
+        "bulk_deltaf_kind": 31,
+        "deltaf_newRTA_gamma": gamma,
+    }
+
+
+def set_deltaf_models(config: dict, row: dict[str, str],
+                      spec: str | None) -> None:
+    """Choose the viscous corrections of one design point.
+
+    Nothing changes without --deltaf-models and without a
+    deltaf_newRTA_gamma column, so earlier campaigns regenerate unchanged.
+    """
+    row_gamma = None
+    if str(row.get("deltaf_newRTA_gamma", "")).strip():
+        row_gamma = float(row["deltaf_newRTA_gamma"])
+        # also the single particlization of --deltaf-models none
+        config["iss_dict"].update(rta_model(row_gamma))
+    if spec is None:
+        if row_gamma is not None:
+            config["control_dict"]["deltaf_models"] = {
+                "RTA": rta_model(row_gamma)
+            }
+        return
+    if spec.strip().lower() == "none":
+        config["control_dict"].pop("deltaf_models", None)
+        return
+    models = {}
+    for name in (s.strip() for s in spec.split(",")):
+        if name in DELTAF_PRESETS:
+            models[name] = dict(DELTAF_PRESETS[name])
+        elif name == "RTA":
+            if row_gamma is None:
+                raise ValueError(
+                    "--deltaf-models RTA needs a deltaf_newRTA_gamma column "
+                    "in the design; use RTA<nnn> for a fixed gamma")
+            models[name] = rta_model(row_gamma)
+        elif re.fullmatch(r"RTA\d{3}", name):
+            models[name] = rta_model(int(name[3:])/100.0)
+        else:
+            raise ValueError(
+                f"--deltaf-models: unknown model {name!r} (Grad22, CE, PTB, "
+                "RTA, RTA<nnn>, none)")
+    if not models:
+        raise ValueError("--deltaf-models: empty list")
+    config["control_dict"]["deltaf_models"] = models
+
+
 def main() -> None:
     args = parse_args()
     cwd = Path.cwd()
@@ -864,6 +960,7 @@ def main() -> None:
         config["control_dict"]["walltime"] = "20:00:00"
 
         update_template_values(config, row)
+        set_deltaf_models(config, row, args.deltaf_models)
 
         dir_name = f"DesignPoint{one_based_index}"
         point_dir = output_dir/dir_name

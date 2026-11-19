@@ -99,13 +99,21 @@ clone_repo_at_commit \
 # samples a positive-definite modified equilibrium instead of the linear delta f,
 # which the MC_sampling 4 sampler clamps to [-1, 1]; deltaf_model 0 (default) is
 # byte-identical to upstream.
+# The pin adds the RTA delta f with tau_R ~ E^gamma of upstream's branch newRTA
+# (never merged there): iss_dict['bulk_deltaf_kind'] = 31 with
+# iss_dict['deltaf_newRTA_gamma'], its coefficient tables inside the repository.
 clone_repo_at_commit \
   https://github.com/IFUSP-Heavy-Ions/iSS.git \
   iSS_code \
-  77d8a3ef441d2ddbf73465908f11c48117867d02 \
+  bbc4f9e698a2010cf799d2ee643f547c970a5afa \
   QGP-USP
 if ! grep -q "deltaf_model_" iSS_code/src/FSSW.cpp; then
   echo "ERROR: iSS_code does not carry the PTB delta f" >&2
+  exit 1
+fi
+if ! grep -q "deltaf_newRTA_gamma_" iSS_code/src/FSSW.cpp \
+    || [ ! -f iSS_code/iSS_tables/deltaf_tables/newRTA/bulk/cs2-cfv-weights-quant.dat ]; then
+  echo "ERROR: iSS_code does not carry the RTA delta f (kind 31) and its tables" >&2
   exit 1
 fi
 

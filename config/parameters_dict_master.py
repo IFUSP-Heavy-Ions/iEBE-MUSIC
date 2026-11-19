@@ -672,8 +672,14 @@ iss_dict = {
     'include_deltaf_bulk': 1,  # include delta f contribution from bulk
     'include_deltaf_diffusion':
         0,  # include delta f contribution from diffusion
-    'bulk_deltaf_kind':
-        1,  # 0: 14-momentum approximation, 1: relaxation time approximation
+    # 0: 14-moment approximation, 1: relaxation time approximation,
+    # 20: 22-moment, 21: Chapman-Enskog (NEoS-BQS tables, shear and bulk),
+    # 31: relaxation time approximation with tau_R ~ E^gamma, shear and bulk,
+    #     no conserved charges (gamma = deltaf_newRTA_gamma)
+    'bulk_deltaf_kind': 1,
+    # bulk_deltaf_kind 31 only: 0 <= gamma <= 1.5 (tables at 0, 0.5, 1, 1.5,
+    # interpolated linearly); iSS exits outside that range
+    'deltaf_newRTA_gamma': 1.0,
     'restrict_deltaf': 0,  # flag to apply restriction on the size of delta f
     'deltaf_max_ratio': 1.0,  # the maximum allowed size of delta f w.r.t f0
     # (restrict_deltaf/deltaf_max_ratio are read only by MC_sampling < 4; the
