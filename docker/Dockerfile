@@ -142,13 +142,15 @@ ENV HOME /opt/
 #   40cc4da = "Pin MUSIC with the resummed transport coefficients (f072672)"
 #             (FlagResumTransportCoeff now takes effect; with the default 0
 #              results are bit-identical to the pins before)
+#   241af6c = "Pin iSS with the RTA delta f (tau_R ~ E^gamma) and wire gamma into the chain"
+#             (bulk_deltaf_kind 31; the other delta f models are unchanged)
 RUN cd ${HOME} && \
     mkdir iEBE-MUSIC && cd iEBE-MUSIC && \
     git init -q . && \
     git remote add origin https://github.com/IFUSP-Heavy-Ions/iEBE-MUSIC.git && \
-    git fetch -q --depth=1 origin 40cc4da089a63e6279827bc37651efa824540b2f && \
+    git fetch -q --depth=1 origin 241af6c52e433c3236c9083c2b2a091d619a88c3 && \
     git checkout -q FETCH_HEAD && \
-    test "$(git rev-parse HEAD)" = "40cc4da089a63e6279827bc37651efa824540b2f" && \
+    test "$(git rev-parse HEAD)" = "241af6c52e433c3236c9083c2b2a091d619a88c3" && \
     cd codes && \
     bash get_code_packages.sh && \
     ./compile_code_packages.sh && \
