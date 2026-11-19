@@ -462,7 +462,10 @@ music_dict = {
     # read in initial conditions from external file (Initial_profile == 9x)
     'Initial_Distribution_input_filename': 'initial/epsilon-u-Hydro.dat',
     's_factor': 0.190,  # normalization factor read in initial data file
-    'preEqVisFactor': 1.0,  # additional scale factor for initial viscous tensor
+    # scale factor for the initial viscous tensor (Initial_profile 9x).  With
+    # FlagResumTransportCoeff = 1 it is instead the cap on
+    # 1.5 (R_pi + R_Pi) of the initial viscous tensor.
+    'preEqVisFactor': 1.0,
     'Initial_time_tau_0':
         0.4,  # starting time of the hydrodynamic evolution (fm/c)
     'Delta_Tau': 0.005,  # time step to use in the evolution [fm/c]
@@ -491,9 +494,14 @@ music_dict = {
     # 17: BEST lattice EoS at finite mu_B
     # transport coefficients
     'quest_revert_strength': 10.0,  # the strength of the viscous regulation
-    'FlagResumTransportCoeff': 0,  # switch to use resummed transport coeff.
-    'FlagResetCausality': 0,
-    'resumTransCoeffAlpha': 1.5,  # resummed transport coeff. control parameter
+    # Resummed transport coefficients: eta, zeta and the second-order
+    # coefficients are multiplied by 1/(1 + atanh^2(alpha (R_pi + R_Pi))),
+    # R_pi = sqrt(pi^{mu nu} pi_{mu nu})/(e + P), R_Pi = |Pi|/(e + P), and the
+    # viscous tensor is kept below 1.5 (R_pi + R_Pi) = 1.  A different set of
+    # evolution equations: results with 1 are not comparable to those with 0.
+    'FlagResumTransportCoeff': 0,
+    'FlagResetCausality': 0,  # not read by the pinned MUSIC
+    'resumTransCoeffAlpha': 1.5,  # alpha above
     'Viscosity_Flag_Yes_1_No_0': 1,  # turn on viscosity in the evolution
     'Include_Shear_Visc_Yes_1_No_0': 1,  # include shear viscous effect
     'Shear_to_S_ratio':

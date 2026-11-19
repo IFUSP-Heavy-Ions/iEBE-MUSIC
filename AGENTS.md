@@ -219,6 +219,15 @@ defaults — prefer those over guessing flags.
   whose y→η Jacobian gives a ~25 % mid-rapidity dip and a window-dependent "yield". Use
   identified particles in rapidity for the yield. The `_vndata_diff_y_-0.5_0.5` filename
   suffix is hardcoded and stale — the table is filled over `rap_min..rap_max`.
+- **`FlagResumTransportCoeff` works since MUSIC pin `f072672`; before, it was silently ignored.**
+  The master has carried the flag since upstream's 2025-01 update, but the chain's MUSIC is the
+  `XSCAPE` branch, which split from upstream `main` before the scheme was merged there and does not
+  read unknown keys. The fork now carries a backport (upstream `main` `febb2ab` plus the
+  `|Pi|/(e + P)` fix of `chun_dev` `b2c918a`). With the flag at 0 results are bit-identical to
+  campaign 2; with 1 the change is large (zr96-c2 dp 583: pion ⟨p_T⟩ +3.5 % central, +14 %
+  peripheral), so the two must never be mixed in one emulator. MUSIC does not complain about a key
+  it does not know: when a new `music_dict` key seems to do nothing, grep
+  `codes/MUSIC_code/src/read_in_parameters.cpp` for it (`FlagResetCausality` is still such a key).
 - **The master's `music_dict` is the only thing that decides the viscosity.** MUSIC has always
   supported the JETSCAPE parametrisation (`T_dependent_Shear_to_S_ratio = 3` with
   `shear_viscosity_3_eta_over_s_{T_kink_in_GeV,low_T_slope_in_GeV,high_T_slope_in_GeV,at_kink}`,

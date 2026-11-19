@@ -50,9 +50,9 @@ Three layers, all immutable by construction:
 
 | directory | repository | pin | what the fork adds |
 |---|---|---|---|
-| `isobar_sampler_code` | `github.com/mluzum/Isobar-Sampler` (`QGP-USP`) | `67b804a` | deterministic seeds, faster sampler, fluctuating deformation, on top of `Public_Release` `bc586de` |
-| `trento_code` | `github.com/IFUSP-Heavy-Ions/trento` (`QGP-USP`) | `4837013` | nucleon-configuration interface, on top of Duke-QCD `10960b2` |
-| `MUSIC_code` | `github.com/IFUSP-Heavy-Ions/MUSIC` (`QGP-USP`) | `cfcc264` | nothing yet (upstream `XSCAPE`) |
+| `isobar_sampler_code` | `github.com/mluzum/Isobar-Sampler` (`QGP-USP`) | `b5eab93` | deterministic seeds, faster sampler, fluctuating deformation, many events per call, on top of `Public_Release` `bc586de` |
+| `trento_code` | `github.com/IFUSP-Heavy-Ions/trento` (`QGP-USP`) | `54aa461` | nucleon-configuration interface, event-id mode, on top of Duke-QCD `10960b2` |
+| `MUSIC_code` | `github.com/IFUSP-Heavy-Ions/MUSIC` (`QGP-USP`) | `f072672` | resummed transport coefficients (`FlagResumTransportCoeff`, off by default), on top of upstream `XSCAPE` `cfcc264` |
 | `iSS_code` | `github.com/IFUSP-Heavy-Ions/iSS` (`QGP-USP`) | `77d8a3e` | PTB delta f, on top of upstream `XSCAPE` `d242555` |
 | `hadronic_afterburner_toolkit_code` | `github.com/IFUSP-Heavy-Ions/hadronic_afterburner_toolkit` (`QGP-USP`) | `d00b6c9` | boost-invariant dN/dy, on top of upstream `2326ba2` |
 | `3dMCGlauber_code` | `github.com/mluzum/3dMCGlauber` | `1d9856c` | (optional backend) |
@@ -233,7 +233,7 @@ For each component you bump:
 |---|---|---|
 | TRENTo | everything shifts | normalization, `reduced-thickness`, `fluctuation` (= 1/σ_k²), nucleon width |
 | isobar sampler | nuclear shape, hence all flow | `gamma` is **degrees in the design CSV, radians in the YAML**; `beta_3` sign is a rotation, not a degree of freedom |
-| MUSIC | spectra, v_n, ⟨p_T⟩ | EOS choice; `music_dict` decides the viscosity — the JETSCAPE parametrisation is `T_dependent_Shear_to_S_ratio = 3`; option 7 has no amplitude knob |
+| MUSIC | spectra, v_n, ⟨p_T⟩ | EOS choice; `music_dict` decides the viscosity — the JETSCAPE parametrisation is `T_dependent_Shear_to_S_ratio = 3`; option 7 has no amplitude knob; `FlagResumTransportCoeff = 1` is a different set of equations, not a refinement (⟨p_T⟩ +3 to +14 % at zr96-c2 dp 583) |
 | iSS | yields, delta-f | the MC_sampling 4 sampler clamps linear delta f to [-1,1]; `restrict_deltaf` does nothing there; use `deltaf_model 1` (PTB) if you want positivity |
 | afterburner | spectra, especially baryons | `decay` vs UrQMD changes the pT grid interpretation downstream |
 | toolkit | every table the analysis reads | pT bins are `pT_min + i·(pT_max-pT_min)/npT`; identified species are flat in *rapidity*, all-charged references are pseudorapidity |

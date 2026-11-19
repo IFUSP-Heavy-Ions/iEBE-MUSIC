@@ -82,11 +82,15 @@ clone_repo_at_commit \
   ad5fe9d3b26434bb1d5c29820499ef26808b5a47
 
 # download MUSIC (XSCAPE branch for SMASH/UrQMD compatibility)
-# QGP-USP = MUSIC-fluid/MUSIC XSCAPE at cfcc264, unmodified
+# QGP-USP = MUSIC-fluid/MUSIC XSCAPE at cfcc264 + the resummed transport
+# coefficients of upstream main (music_dict['FlagResumTransportCoeff'] = 1; the
+# XSCAPE branch split off before they were merged and ignored the flag), with
+# the bulk inverse Reynolds number of the regulator as |Pi|/(e + P) (upstream
+# chun_dev b2c918a).  Flag 0 (default) is bit-identical to cfcc264.
 clone_repo_at_commit \
   https://github.com/IFUSP-Heavy-Ions/MUSIC.git \
   MUSIC_code \
-  cfcc26455450588961e81139045dc0eef387437c \
+  f072672067663ef83f8206af1afd34e4bf21b974 \
   QGP-USP
 
 # download iSS particle sampler
