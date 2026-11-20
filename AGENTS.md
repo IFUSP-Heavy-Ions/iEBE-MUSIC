@@ -219,6 +219,17 @@ defaults — prefer those over guessing flags.
   whose y→η Jacobian gives a ~25 % mid-rapidity dip and a window-dependent "yield". Use
   identified particles in rapidity for the yield. The `_vndata_diff_y_-0.5_0.5` filename
   suffix is hardcoded and stale — the table is filled over `rap_min..rap_max`.
+- **UrQMD and SMASH: four traps, fixed together with the standard output** (details in
+  `docs/notes/afterburner_rapidity_window.md`). (a) UrQMD continuing events from a file reads
+  `rsd` only after seeding itself from the clock, so every run differed; its event header says
+  `random seed: N (auto)`. `codes/patches/urqmd_fixed_seed.patch` (applied by
+  `get_code_packages.sh`) makes it `(fixed)`. (b) SMASH numbers its output folders
+  (`data/0`, `data/1`, ...): the old script ran it ten times per event and copied `data/0`
+  each time, i.e. kept one run in ten; it now writes to a fixed folder with `-o ... -f`.
+  (c) SMASH's `Nevents` was fixed at 50 while iSS writes as many samples as the event needs
+  (34 aborted SMASH, 540 lost 490); it is now counted from `OSCAR.DAT` per run. (d) Both
+  cascades end with eta and Sigma0 undecayed; `codes/standard_output.py` decays them before
+  summing. The toolkit tables of a UrQMD run still lack (d).
 - **RTA delta f with τ_R ∝ E^γ: `bulk_deltaf_kind 31` + `deltaf_newRTA_gamma`, since iSS pin `bbc4f9e`.**
   A backport of upstream iSS's branch `newRTA`, which was never merged there and renames the
   parameter to `deltaf_kind`; the fork keeps `bulk_deltaf_kind`. γ must be in [0, 1.5] (iSS exits

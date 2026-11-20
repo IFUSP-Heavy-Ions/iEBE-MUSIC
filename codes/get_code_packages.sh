@@ -128,6 +128,15 @@ clone_repo_at_commit \
   https://Chunshen1987@bitbucket.org/Chunshen1987/urqmd_afterburner.git \
   urqmd_code \
   09eeac28b5861d68d166c1f89b2e97e0a0ebfe8f
+# In afterburner mode (events read from a file) UrQMD reads the seed of its
+# input file (rsd) only after it has seeded itself from the clock, so every run
+# differed even with rsd set.  The patch applies the seed once it is read.
+(cd urqmd_code/urqmd && patch -p1 --forward < ../../patches/urqmd_fixed_seed.patch)
+if ! grep -q "fixed seed makes the afterburner reproducible" \
+    urqmd_code/urqmd/src/output.f; then
+  echo "ERROR: urqmd_code does not carry patches/urqmd_fixed_seed.patch" >&2
+  exit 1
+fi
 
 # download SMASH afterburner
 clone_repo_at_tag \

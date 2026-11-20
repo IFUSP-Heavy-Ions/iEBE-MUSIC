@@ -1,0 +1,16 @@
+--- a/src/output.f
++++ b/src/output.f
+@@ -1066,6 +1066,13 @@
+       acttime=r0(1) 
+ c     read options-file
+       call getparams
++c     The seed of the input file (rsd) is only read here, by getparams:
++c     init has already seeded from the clock.  Apply it once, so that a
++c     fixed seed makes the afterburner reproducible.
++      if (ranseed.gt.0.and.(.not.fixedseed)) then
++         fixedseed=.true.
++         call sseed(ranseed)
++      endif
+       success = .true.
+       return
+ c handle EOF. This is not necessarily an error.

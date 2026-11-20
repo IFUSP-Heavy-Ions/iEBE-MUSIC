@@ -230,7 +230,7 @@ finalize_job_output() {
     # Flow observables and the TRENTo event summary, named with the global event
     # id, so they stay joinable across jobs.
     find "${SCRATCH_DIR}/playground" -type f \\
-        \\( -name 'spvn_results_*.h5' -o -name 'trento_event_summary_*.txt' \\) \\
+        \\( -name 'spvn_results_*.h5' -o -name 'qn_*.h5' -o -name 'trento_event_summary_*.txt' \\) \\
         -exec cp -f {} "${out_dir}/" \\; 2>/dev/null || true
     # The driver runs once per event, so each event writes its own
     # events_drawn.csv with a single row. Concatenate them into one table per

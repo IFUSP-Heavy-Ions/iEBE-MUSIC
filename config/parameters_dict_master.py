@@ -27,8 +27,18 @@ control_dict = {
     'compute_polarization': False,  # flag to save spin polarization results
     # {name: {iSS overrides}} particlizes every surface once per model (same
     # seeds) into spvn_results_<id>/deltaf_<name>; None: one particlization
-    # with iss_dict as is.  Decays-only and UrQMD chains.
+    # with iss_dict as is.  All three afterburners.
     'deltaf_models': None,
+    # Standard per-event output, qn_<id>.h5 (docs/standard_output.md): exact
+    # per-species, per-pT-bin sums of the final particles, for every
+    # afterburner.  With UrQMD and SMASH only particles with |y| < y_cut are
+    # summed, because the cascade has edges: y_cut None means the sampled
+    # range (iss_dict y_LB, y_RB) minus afterburner_edge_margin on each side
+    # (1.25 units leaves <= 0.2 % in yields and <pT>, see
+    # docs/notes/afterburner_rapidity_window.md).
+    'standard_output': True,
+    'afterburner_y_cut': None,
+    'afterburner_edge_margin': 1.25,
     'EOSType': 0,
     'EOSId': 0,
     'EOSFileName': "EoS.pkl",

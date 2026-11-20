@@ -2,7 +2,9 @@
 
 **Status:** layout agreed with the soft-sector analysis
 (`soft-sector-data-curation`; its reader will live in `soft-sector-sim-adapters`)
-on 2026-11-20. Nothing in the chain writes it yet.
+on 2026-11-20. Written by `codes/standard_output.py` (called from the driver,
+settings in `control_dict['standard_output']`, `afterburner_y_cut`,
+`afterburner_edge_margin`) and merged by `scripts/merge_qn.py`.
 
 The goal is one output that serves the decays-only path, UrQMD and SMASH alike,
 carries the exact sums the analysis needs (instead of tables it has to rebuild
@@ -22,10 +24,16 @@ the collection rule (section 3):
 | quantity | definition |
 |---|---|
 | `Q[..., 0, :]` | number of particles (real part; imaginary part 0) |
-| `Q[..., n, :]`, n = 1..10 | sum of exp(i n phi) |
+| `Q[..., n, :]`, n = 1..10 | sum of exp(i n phi), up to the row's `species_nmax` |
 | `ptsum[..., k-1, :]`, k = 1..4 | sum of pT^k [GeV^k] |
 | `mtsum` | sum of mT = sqrt(pT^2 + m^2) [GeV] |
 | `Qpt[..., n-1, :]`, n = 1..3 | sum of pT exp(i n phi) [GeV] |
+
+`/grid/species_nmax` is the highest harmonic stored for each row: 10 for every
+charged row (all charged hadrons are their sum) and 6 for Lambda, anti-Lambda,
+K0 and anti-K0. **Entries of `Q` above a row's `species_nmax` are not stored:**
+the file holds zeros there, which must be read as a missing harmonic, never as
+Q_n = 0.
 
 Sums are raw: not divided by the number of oversamples or by any width.
 Accumulation is in float64; storage is complex64 / float32 (counts are exact
@@ -57,9 +65,11 @@ definition. The decays-only path already does this. **SMASH and UrQMD do not
 quite:** they end with eta and Sigma0 undecayed (per unit rapidity in a central
 zr96-c2 event: about 12 eta and 1.2 Sigma0 against 230 charged hadrons and
 3 Lambda). Without those decays charged hadrons are about 3 % low and Lambda
-about 30 % low (Sigma0 -> Lambda gamma). The chain will decay them after the
-cascade, before summing. phi decays before it can be counted on every path; it
-is not a row in version 1.
+about 30 % low (Sigma0 -> Lambda gamma). `codes/standard_output.py` decays them
+after the cascade, before summing, with the channels of iSS's
+`pdg-urqmd_v3.3+.dat` (phase space, seeded by event id and variant); the number
+done is the variant attribute `end_decays`. phi decays before it can be counted
+on every path; it is not a row in version 1.
 
 ## 2. File layout
 
@@ -74,7 +84,10 @@ one for the other). Every dataset with an event axis has it first, chunked by
 /                      attrs: format = "iebe-music-qn", format_version = 1,
                               mode = "2D", variants = "Grad22,CE,PTB" (order kept),
                               afterburner = "decay" | "UrQMD" | "SMASH",
-                              chain_revision, design_point, b_max, master_seed,
+                              chain_revision, parameter_file, b_max, master_seed,
+                              n_events (rows), n_drawn, n_collided,
+                              n_no_collision (from /drawn; with a selection,
+                              the selection's counts),
                               + the selection-format-1 attributes when the
                               campaign is importance-sampled (section 5)
 /grid/
@@ -83,6 +96,7 @@ one for the other). Every dataset with an event axis has it first, chunked by
     species_mass       [15]           float64 GeV
     species_charge     [15]           int32
     harmonics          [11]           int32   0..10 (Q); Qpt carries 1..3
+    species_nmax       [15]           int32   highest stored harmonic per row
     y_profile_edges    [ny+1]         float64
 /events/               one row per collided event that reached particlization
     event_id           [E]   int64    global event id (common random numbers)
@@ -92,17 +106,21 @@ one for the other). Every dataset with an event axis has it first, chunked by
                        [E]   float64  selection values, NaN without selection
     b                  [E]   float32  impact parameter [fm]
     mult               [E]   float32  TRENTo total (the selection estimator)
-/hydro/                from MUSIC, one row per event, NaN where an event froze
-    tau                [E, T]         out before a time was reached
-    ecc_ed             [E, T, 12]     eccentricities of e: (cos, sin) for n = 1..6
-    ecc_nB, ecc_nQ     [E, T, 12]
-    momentum_anisotropy[E, T, 6]      ideal, shear, full: (cos, sin)
-    meanpT_estimators  [E, T, 4]      dS/deta, dE/deta, [s], [r^2]
+/hydro/                MUSIC's per-time tables, the rows as MUSIC writes them
+                       (columns in the attrs columns_<name>); NaN where an
+                       event froze out before a time was reached
+    tau                [E, T]
+    ecc_ed             [E, T, 12]     eta_s, integral of e, then (cos, sin) of
+                                      ecc_n for n = 1..5 (MUSIC's own header
+                                      says n = 1-6; the rows hold 1..5)
+    ecc_nB, ecc_nQ     [E, T, 12]     the same for n_B and n_Q
+    momentum_anisotropy[E, T, 7]      eta_s, then ideal, shear, full: (cos, sin)
+    meanpT_estimators  [E, T, 5]      eta_s, dS/deta, dE/deta, [s], [r^2]
 /drawn/                one row per drawn event id of this design point,
                        including no_collision and failed (replaces csv.tgz and
                        selection_dpNNNN.csv)
     event_id, status, b, b_over_bmax, mult, weight, p_acc, centrality,
-    estimator, u, selection_check
+    estimator, u, selection_check      (attr status_codes: the codes below)
 /deltaf_<name>/        one group per delta f variant, same event rows as /events
     attrs: iss_overrides (as in campaign 2), bulk_deltaf_kind, deltaf_model,
            deltaf_newRTA_gamma (effective values, always written),
@@ -174,8 +192,8 @@ as empty). Only 0 and 2 appear in `/events`.
 The selection-format-1 contract (`docs/importance_sampling.md`) carries over
 unchanged in content: root attributes `selection_format = 1`, `n_drawn`,
 `n_collided`, `n_no_collision`, `n_accepted`, `covered_centrality`,
-`selection` (JSON), and the summary of `select_events.py` (`coverage`,
-`calibration`, ...) as the JSON attribute `selection_summary`. The per-event
+`selection` (the whole summary of `select_events.py` as a JSON string, as in
+format 1). The per-event
 weight and selection values are the `/events` datasets instead of attributes
 of each event group, and `/drawn` replaces the selection csv. The minimum-bias
 denominator remains `n_collided`, not the number of rows and not sum(weight).
@@ -183,9 +201,13 @@ denominator remains `n_collided`, not the number of rows and not sum(weight).
 ## 6. Reproducibility
 
 Every random stream depends only on `(master_seed, seed_add, event id,
-oversample index)`, as for iSS today. The cascades currently do not: SMASH runs
-with `Randomseed: -1` (clock) and UrQMD's `rsd` line is commented out. Both get
-the seed of the particlization they continue.
+oversample index)`. The cascades get the seed of the iSS call whose particles
+they continue (`run_afterburner.sh`): SMASH through `Randomseed` in a per-run
+copy of its config, UrQMD through `rsd`. UrQMD needs
+`codes/patches/urqmd_fixed_seed.patch` for that: when it continues events read
+from a file it reads `rsd` only after seeding itself from the clock, so before
+the patch every run differed whatever `rsd` said (its event header then says
+`(auto)`; with the patch `(fixed)`).
 
 ## 7. Validation before the toolkit tables are dropped
 

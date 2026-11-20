@@ -496,6 +496,7 @@ finalize_job_output() {
     mkdir -p "${quiet_out_dir}"
     find "${SCRATCH_DIR}/playground" -type f \( \
         -name 'spvn_results_*.h5' -o \
+        -name 'qn_*.h5' -o \
         -name 'trento_event_summary_*.txt' -o \
         -name 'grid_extent_*.csv' -o \
         -name 'target_nucleus.hdf' \

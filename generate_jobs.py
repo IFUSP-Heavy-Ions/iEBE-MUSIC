@@ -698,6 +698,9 @@ do
     mv fort.14 ../urqmd/OSCAR.input
     rm -fr ../iSS/OSCAR.DAT
     cd ../urqmd
+    # UrQMD's own random numbers, seeded from the iSS seed (the template
+    # leaves rsd commented out, i.e. clock-seeded)
+    sed -i "s/^#*rsd .*/rsd $((RANDOMSEED % 2147483647))/" uqmd.burner
     ./runqmd.sh > run.log
     mv particle_list.dat ../UrQMD_results/particle_list_${iev}.dat
     rm -fr OSCAR.input
@@ -716,13 +719,23 @@ done
 done
         """)
     elif afterburner_type == "SMASH":
+        # One SMASH run per iSS call: as many events as iSS wrote (the number
+        # depends on the event), the iSS seed, and a fixed output folder that
+        # is overwritten (SMASH would otherwise number new folders data/1,
+        # data/2, ... and data/0 would be read every time).  The outputs are
+        # appended; codes/standard_output.py reads concatenated SMASH files.
         script.write("""
-    cp OSCAR.DAT ../SMASH/list/OSCAR.DAT0
+    nev=`grep -c "^# event [0-9]* out" OSCAR.DAT`
+    mv OSCAR.DAT ../SMASH/list/OSCAR.DAT0
     cd ../SMASH
+    sed -e "s/^\\( *Nevents:\\).*/\\1 $nev/" \\
+        -e "s/^\\( *Randomseed:\\).*/\\1 $((RANDOMSEED % 2147483647))/" \\
+        list/config.yaml > list/config_run.yaml
     unset PYTHIA8DATA
-    ./smash -i list/config.yaml > run.log
+    ./smash -i list/config_run.yaml -o run_output -f > run.log
     cd ..
-    cp SMASH/data/0/particles_oscar2013_extended.bin {results_dir}/particle_list.bin
+    cat SMASH/run_output/particles_oscar2013_extended.bin >> {results_dir}/particle_list.bin
+    rm -fr SMASH/run_output SMASH/list/OSCAR.DAT0
 done
 """.format(results_dir=results_dir))
     if HBT_flag:
@@ -772,6 +785,64 @@ def generate_script_analyze_spvn(folder_name, HBT_flag, logfile):
     script.close()
 
 
+def chain_revision():
+    """Framework commit, read from .git without calling git (inside the
+    image the checkout belongs to another user, and git refuses it)."""
+    try:
+        gitdir = path.join(path.dirname(path.abspath(__file__)), ".git")
+        head = open(path.join(gitdir, "HEAD")).read().strip()
+        if not head.startswith("ref:"):
+            return head
+        ref = head.split(None, 1)[1]
+        if path.exists(path.join(gitdir, ref)):
+            return open(path.join(gitdir, ref)).read().strip()
+        for line in open(path.join(gitdir, "packed-refs")):
+            if line.strip().endswith(" " + ref):
+                return line.split()[0]
+    except OSError:
+        pass
+    return "unknown"
+
+
+def write_standard_output_conf(event_folder, param_folder, para_dict,
+                               afterburner_type):
+    """standard_output.json for the driver."""
+    control = para_dict.control_dict
+    if not control.get('standard_output', True):
+        return
+    iss_ab = 1
+    iss_par = path.join(param_folder, 'iSS', 'iSS_parameters.dat')
+    try:
+        for line in open(iss_par):
+            if line.split("#")[0].split("=")[0].strip() == "afterburner_type":
+                iss_ab = int(float(line.split("#")[0].split("=")[1]))
+    except (OSError, ValueError, IndexError):
+        pass
+    # the particle table iSS reads for that afterburner_type
+    table = {2: "pdg-SMASH.dat", 1: "pdg-urqmd_v3.3+.dat"}.get(
+        iss_ab, "pdg-s95pv1.dat")
+    root = {"chain_revision": chain_revision(),
+            "parameter_file": path.basename(
+                getattr(para_dict, '__file__', '') or '')}
+    try:
+        root["master_seed"] = int(para_dict.isobars_conf_dict_target[
+            'isobar_samples']['master_seed']['value'])
+    except (AttributeError, KeyError, TypeError, ValueError):
+        pass
+    conf = {
+        "enabled": True,
+        "afterburner": afterburner_type,
+        "iss_table": table,
+        # UrQMD/SMASH only: particles with |y| < y_cut are summed; None means
+        # the sampled range minus edge_margin on each side
+        "y_cut": control.get('afterburner_y_cut'),
+        "edge_margin": control.get('afterburner_edge_margin', 1.25),
+        "root_attrs": root,
+    }
+    with open(path.join(event_folder, 'standard_output.json'), 'w') as f:
+        json.dump(conf, f, indent=1)
+
+
 def generate_event_folders(initial_condition_database, initial_condition_type,
                            package_root_path, code_path, working_folder,
                            cluster_name, event_id, event_id_offset,
@@ -788,6 +859,7 @@ def generate_event_folders(initial_condition_database, initial_condition_type,
 
     #################################################################################
     shutil.copy(path.join(code_path, 'analysis_cli_optimized.py'), event_folder)
+    shutil.copy(path.join(code_path, 'standard_output.py'), event_folder)
     #################################################################################
 
     shutil.copy(
@@ -1032,6 +1104,11 @@ def generate_event_folders(initial_condition_database, initial_condition_type,
                     "parameters".format(name))
         with open(path.join(event_folder, 'deltaf_models.json'), 'w') as f:
             json.dump(deltaf_models, f, indent=1)
+
+    # Standard per-event output (docs/standard_output.md): the driver sums the
+    # final particles of every particlization into qn_<id>.h5.
+    write_standard_output_conf(event_folder, param_folder, para_dict,
+                               afterburner_type)
 
     sub_ev_prefix = "SMASHev" if afterburner_type == "SMASH" else "UrQMDev"
 

@@ -58,9 +58,12 @@ def run_one(ev, vdir, par, image, per_job, use_driver, nice, keep=False,
     dt = time.time() - t0
     h5 = glob.glob(os.path.join(wd, "playground", "event_*", "EVENT_RESULTS_%d" % ev,
                                 "spvn_results_%d.h5" % ev))
-    if rc == 0 and h5:
+    qn = glob.glob(os.path.join(wd, "playground", "event_*", "EVENT_RESULTS_%d" % ev,
+                                "qn_%d.h5" % ev))
+    if rc == 0 and (h5 or qn):
         res = os.path.join(vdir, "results")
-        shutil.copy2(h5[0], res)
+        for f in h5[:1] + qn[:1]:  # SMASH events have only the qn file
+            shutil.copy2(f, res)
         for f in glob.glob(os.path.join(wd, "playground", "**",
                                         "trento_event_summary_%d*" % ev),
                            recursive=True)[:1]:

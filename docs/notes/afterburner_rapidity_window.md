@@ -76,7 +76,7 @@ these sizes and has not reached its optimum by W = 10.
 times the particles, which moves the UrQMD optimum to narrower ranges; repeat
 the scan there.
 
-## Found on the way
+## Found on the way (all fixed with the standard output, see AGENTS.md)
 
 * Neither cascade was reproducible: SMASH ran with `Randomseed: -1` and UrQMD's
   `rsd` line is commented out.

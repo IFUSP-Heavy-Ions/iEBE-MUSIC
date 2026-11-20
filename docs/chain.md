@@ -213,8 +213,14 @@ Per event, `spvn_results_<id>.h5` holds one group per event with the hydro-level
 datasets and one subgroup per delta-f model (`deltaf_Grad22`, `deltaf_CE`,
 `deltaf_PTB` in zr96-c2), with attributes `deltaf_models`,
 `toolkit_npT/pT_min/pT_max`, and `iss_overrides` on each subgroup.
-Per job, one tarball with 20 event h5 files plus the TRENTo summaries, grid
-extents and `events_drawn_<proc>.csv`.
+Next to it, `qn_<id>.h5` is the standard per-event output
+(`docs/standard_output.md`, written by `codes/standard_output.py` for every
+afterburner; SMASH events have only this file): exact per-species, per-pT-bin
+sums of the final particles, which `scripts/merge_qn.py` merges into one dense
+`qn_dpNNNN.h5` per design point. Until it has been validated in a campaign both
+are written; afterwards the toolkit tables go.
+Per job, one tarball with 20 event h5 files (both kinds) plus the TRENTo
+summaries, grid extents and `events_drawn_<proc>.csv`.
 
 `scripts/osg/consolidate_dps.sh` extracts the tarballs one design point at a time and
 `scripts/merge_dp_h5.py` writes `merged/<dp>/<dp>.h5` plus `sources.txt` (a

@@ -937,6 +937,12 @@ def mark_drawn_event(final_results_folder, event_id, status):
     found = False
     for row in rows:
         if row.get("event_id") == str(int(event_id)):
+            # An event without a collision (TRENTo mult 0) also runs free
+            # streaming and MUSIC on an empty profile and ends with an empty
+            # surface; it must stay "no_collision", not become "no_surface",
+            # or it would be counted as a collided event with no particles.
+            if row.get("status") in ("no_collision", "no_trento"):
+                return
             row["status"] = status
             found = True
     if not found or not columns:
@@ -1640,6 +1646,97 @@ def run_spvn_analysis(urqmd_file_path,
     shutil.move(spvn_folder, final_results_folder)
 
 
+def read_standard_output_conf(fname="standard_output.json"):
+    """Settings of the standard per-event output (docs/standard_output.md),
+    written by generate_jobs.py; None when absent or disabled."""
+    if not path.exists(fname):
+        return None
+    with open(fname) as f:
+        conf = json.load(f)
+    return conf if conf.get("enabled", True) else None
+
+
+def standard_output_variant(conf, particle_file, event_id, name, iss_args):
+    """Sums of one particlization (one delta f variant) of an event."""
+    import standard_output as so
+    sub = "SMASHev_0" if conf["afterburner"] == "SMASH" else "UrQMDev_0"
+    par = so.read_iss_parameters(path.join(sub, "iSS", "iSS_parameters.dat"),
+                                 iss_args)
+    y_range = (float(par.get("y_LB", -5.0)), float(par.get("y_RB", 5.0)))
+    table = path.join(sub, "iSS", "iSS_tables", conf["iss_table"])
+    if conf["afterburner"] == "decay":
+        kind, y_cut = "decay", None
+    else:
+        kind = "smash" if conf["afterburner"] == "SMASH" else "urqmd"
+        y_cut = conf.get("y_cut")
+        if y_cut is None:
+            y_cut = (min(-y_range[0], y_range[1])
+                     - float(conf.get("edge_margin", 1.25)))
+    sums = so.accumulate(kind, particle_file, y_range, y_cut, table,
+                         so.decay_seed(int(event_id), name))
+    attrs = {
+        "iss_overrides": iss_args or "",
+        "bulk_deltaf_kind": int(float(par.get("bulk_deltaf_kind", -1))),
+        "deltaf_model": int(float(par.get("deltaf_model", 0))),
+        "deltaf_newRTA_gamma": float(par.get("deltaf_newRTA_gamma", 1.0)),
+        "y_sampled": [y_range[0], y_range[1]],
+        "collection": "all" if y_cut is None else "window",
+        "y_cut": float("nan") if y_cut is None else y_cut,
+        "dy_width": (y_range[1] - y_range[0]) if y_cut is None else 2*y_cut,
+    }
+    print("\U0001F4CA  [{}] standard output, variant {}: {} particlizations, "
+          "{} end-of-cascade decays".format(time.asctime(), name,
+                                            sums["nsamples"],
+                                            sums["end_decays"]),
+          flush=True)
+    return (name, attrs, sums), so.species_mass(table)
+
+
+def write_standard_output(final_results_folder, event_id, variants, masses,
+                          conf):
+    """qn_<id>.h5 in the results folder; reads the hydro tables, so it runs
+    before zip_results_into_hdf5 moves them."""
+    import standard_output as so
+    ev = int(event_id)
+    drawn = {}
+    try:
+        with open(path.join(final_results_folder, "events_drawn.csv")) as f:
+            for row in csv.DictReader(f):
+                if int(row["event_id"]) == ev:
+                    drawn = row
+    except (OSError, KeyError, ValueError):
+        pass
+
+    def num(d, key):
+        try:
+            return float(d.get(key))
+        except (TypeError, ValueError):
+            return float("nan")
+    sel = EVENT_SELECTION.get(ev) or {}
+    events = {
+        "event_id": np.array([ev], np.int64),
+        "status": np.array([0], np.uint8),
+        "weight": np.array([num(sel, "weight") if sel else 1.0]),
+        "p_acc": np.array([num(sel, "p_acc")]),
+        "centrality": np.array([num(sel, "centrality")]),
+        "estimator": np.array([num(sel, "estimator")]),
+        "b": np.array([num(drawn, "b")], np.float32),
+        "mult": np.array([num(drawn, "mult")], np.float32),
+    }
+    hydro, headers = so.read_hydro_tables(
+        path.join(final_results_folder, "hydro_results_{}".format(event_id)))
+    if hydro:
+        hydro["headers"] = headers
+    root = dict(conf.get("root_attrs", {}))
+    root["afterburner"] = conf["afterburner"]
+    if drawn.get("b_max"):
+        root["b_max"] = num(drawn, "b_max")
+    out = path.join(final_results_folder, "qn_{}.h5".format(event_id))
+    so.write_event_file(out, root, events, variants, hydro=hydro,
+                        masses=masses)
+    return path.exists(out)
+
+
 def check_an_event_is_good(event_folder, deltaf_models=None):
     """This function checks the given event contains all required files"""
     if deltaf_models:
@@ -1651,9 +1748,9 @@ def check_an_event_is_good(event_folder, deltaf_models=None):
     # Only require files that survive pruning: the identified-species v_n vs pT
     # arrays and the unidentified reference.
     required_patterns = [
-        'particle_211_vndata_diff_y_*_boostinv.dat',
-        'particle_321_vndata_diff_y_*_boostinv.dat',
-        'particle_2212_vndata_diff_y_*_boostinv.dat',
+        'particle_211_vndata_diff_y_*.dat',
+        'particle_321_vndata_diff_y_*.dat',
+        'particle_2212_vndata_diff_y_*.dat',
     ]
     event_file_list = [
         path.basename(f) for f in glob(path.join(event_folder, "*"))
@@ -1972,6 +2069,9 @@ def main(para_dict_):
             print("{} exists ...".format(final_results_folder), flush=True)
             results_file = path.join(final_results_folder,
                                      "spvn_results_{}.h5".format(event_id))
+            if para_dict_['afterburner_type'] == "SMASH":
+                results_file = path.join(final_results_folder,
+                                         "qn_{}.h5".format(event_id))
             status = False
             if path.exists(results_file):
                 status = True
@@ -2105,7 +2205,12 @@ def main(para_dict_):
             continue
 
         deltaf_models = para_dict_.get('deltaf_models')
-        if deltaf_models and para_dict_['afterburner_type'] != "SMASH":
+        so_conf = para_dict_.get('standard_output')
+        if not str(event_id).isdigit():
+            so_conf = None
+        so_variants, so_masses = [], None
+        is_smash = para_dict_['afterburner_type'] == "SMASH"
+        if deltaf_models:
             # One particlization per delta f model, on the same surface and
             # with the same seeds, each analysed into
             # spvn_results_<id>/deltaf_<name>.
@@ -2131,16 +2236,32 @@ def main(para_dict_):
                           flush=True)
                     models_ok = False
                     break
-                run_spvn_analysis(urqmd_file_path, num_threads,
-                                  final_results_folder, event_id, para_dict_,
-                                  subfolder="deltaf_" + model_name)
+                if so_conf:
+                    variant, so_masses = standard_output_variant(
+                        so_conf, urqmd_file_path, event_id, model_name,
+                        iss_args)
+                    so_variants.append(variant)
+                if not is_smash:
+                    run_spvn_analysis(urqmd_file_path, num_threads,
+                                      final_results_folder, event_id,
+                                      para_dict_,
+                                      subfolder="deltaf_" + model_name)
                 if not para_dict_["save_urqmd"]:
                     remove(urqmd_file_path)
             if not models_ok:
                 continue
 
-            status = zip_results_into_hdf5(final_results_folder, event_id,
-                                           para_dict_, deltaf_models)
+            so_status = False
+            if so_conf:
+                so_status = write_standard_output(final_results_folder,
+                                                  event_id, so_variants,
+                                                  so_masses, so_conf)
+            if is_smash:
+                status = so_status
+            else:
+                status = zip_results_into_hdf5(final_results_folder,
+                                               event_id, para_dict_,
+                                               deltaf_models)
             try:
                 append_flow_sample_counts(final_results_folder, event_id)
             except Exception:
@@ -2156,19 +2277,26 @@ def main(para_dict_):
                       flush=True)
                 continue
 
-            #########################################################################################
-            if para_dict_['afterburner_type'] == "SMASH":
+            so_status = False
+            if so_conf:
+                variant, so_masses = standard_output_variant(
+                    so_conf, urqmd_file_path, event_id, "default", "")
+                so_status = write_standard_output(final_results_folder,
+                                                  event_id, [variant],
+                                                  so_masses, so_conf)
+            if is_smash:
                 curr_time = time.asctime()
                 print(
                     f"\U0001F4BE [{curr_time}] SMASH is finished. "
                     f"Binary file saved in: {urqmd_file_path}",
                     flush=True)
-                status = run_smash_analysis(urqmd_file_path,
-                                            final_results_folder,
-                                            event_id,
-                                            analysis_mode="2D")
-            ##########################################################################################
-
+                if so_conf:
+                    status = so_status
+                else:
+                    status = run_smash_analysis(urqmd_file_path,
+                                                final_results_folder,
+                                                event_id,
+                                                analysis_mode="2D")
             else:
 
                 # finally collect results
@@ -2307,6 +2435,7 @@ if __name__ == "__main__":
         'free_stream_grid_step': FREE_STREAM_GRID_STEP,
         'adaptive_grid': ADAPTIVE_GRID,
         'deltaf_models': read_deltaf_models(),
+        'standard_output': read_standard_output_conf(),
     }
 
     main(para_dict)
