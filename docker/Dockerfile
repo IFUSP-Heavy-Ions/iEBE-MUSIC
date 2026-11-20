@@ -147,13 +147,15 @@ ENV HOME /opt/
 #   d0ee2ad = "Write the standard per-event output; make UrQMD and SMASH runs correct"
 #             (qn_<id>.h5 next to the toolkit tables, which stay bit-identical;
 #              UrQMD seed patch, SMASH run fixes)
+#   8a7294f = "Tabulated EoS, toolkit tables off by default, one SMASH run per particlization"
+#             (MUSIC d1323e8 and iSS 24ae580; EOS_to_use 9 results unchanged)
 RUN cd ${HOME} && \
     mkdir iEBE-MUSIC && cd iEBE-MUSIC && \
     git init -q . && \
     git remote add origin https://github.com/IFUSP-Heavy-Ions/iEBE-MUSIC.git && \
-    git fetch -q --depth=1 origin d0ee2ad756ba2b8499d03502be3bed73675a021f && \
+    git fetch -q --depth=1 origin 8a7294f267e77e8a07d99ca33171ca3ef2a42f75 && \
     git checkout -q FETCH_HEAD && \
-    test "$(git rev-parse HEAD)" = "d0ee2ad756ba2b8499d03502be3bed73675a021f" && \
+    test "$(git rev-parse HEAD)" = "8a7294f267e77e8a07d99ca33171ca3ef2a42f75" && \
     cd codes && \
     bash get_code_packages.sh && \
     ./compile_code_packages.sh && \
