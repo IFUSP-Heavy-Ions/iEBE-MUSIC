@@ -1674,6 +1674,15 @@ def standard_output_variant(conf, particle_file, event_id, name, iss_args):
                      - float(conf.get("edge_margin", 1.25)))
     sums = so.accumulate(kind, particle_file, y_range, y_cut, table,
                          so.decay_seed(int(event_id), name))
+    if sums["nsamples"] == 0:
+        # a surface was there (empty ones are caught before iSS), so iSS or
+        # the afterburner failed; never record that as an event without
+        # particles
+        print("\U000026D4  [{}] variant {}: the particle list holds no "
+              "event; iSS or the afterburner failed (see their run.log)".format(
+                  time.asctime(), name),
+              flush=True)
+        return None, None
     attrs = {
         "iss_overrides": iss_args or "",
         "bulk_deltaf_kind": int(float(par.get("bulk_deltaf_kind", -1))),
@@ -2069,7 +2078,9 @@ def main(para_dict_):
             print("{} exists ...".format(final_results_folder), flush=True)
             results_file = path.join(final_results_folder,
                                      "spvn_results_{}.h5".format(event_id))
-            if para_dict_['afterburner_type'] == "SMASH":
+            so_conf0 = para_dict_.get('standard_output')
+            if para_dict_['afterburner_type'] == "SMASH" or (
+                    so_conf0 and not so_conf0.get("toolkit_tables", False)):
                 results_file = path.join(final_results_folder,
                                          "qn_{}.h5".format(event_id))
             status = False
@@ -2210,6 +2221,10 @@ def main(para_dict_):
             so_conf = None
         so_variants, so_masses = [], None
         is_smash = para_dict_['afterburner_type'] == "SMASH"
+        # the toolkit tables (spvn_results_<id>.h5): only on request once the
+        # standard output is written; the toolkit cannot read SMASH output
+        run_toolkit = (not is_smash) and (
+            so_conf is None or so_conf.get("toolkit_tables", False))
         if deltaf_models:
             # One particlization per delta f model, on the same surface and
             # with the same seeds, each analysed into
@@ -2240,8 +2255,14 @@ def main(para_dict_):
                     variant, so_masses = standard_output_variant(
                         so_conf, urqmd_file_path, event_id, model_name,
                         iss_args)
+                    if variant is None:
+                        mark_drawn_event(final_results_folder, event_id,
+                                         "particlization_failed")
+                        exitErrorTrigger = True
+                        models_ok = False
+                        break
                     so_variants.append(variant)
-                if not is_smash:
+                if run_toolkit:
                     run_spvn_analysis(urqmd_file_path, num_threads,
                                       final_results_folder, event_id,
                                       para_dict_,
@@ -2256,12 +2277,11 @@ def main(para_dict_):
                 so_status = write_standard_output(final_results_folder,
                                                   event_id, so_variants,
                                                   so_masses, so_conf)
-            if is_smash:
-                status = so_status
-            else:
-                status = zip_results_into_hdf5(final_results_folder,
-                                               event_id, para_dict_,
-                                               deltaf_models)
+            status = so_status if so_conf else True
+            if run_toolkit:
+                status = zip_results_into_hdf5(
+                    final_results_folder, event_id, para_dict_,
+                    deltaf_models) and status
             try:
                 append_flow_sample_counts(final_results_folder, event_id)
             except Exception:
@@ -2281,22 +2301,21 @@ def main(para_dict_):
             if so_conf:
                 variant, so_masses = standard_output_variant(
                     so_conf, urqmd_file_path, event_id, "default", "")
+                if variant is None:
+                    mark_drawn_event(final_results_folder, event_id,
+                                     "particlization_failed")
+                    exitErrorTrigger = True
+                    continue
                 so_status = write_standard_output(final_results_folder,
                                                   event_id, [variant],
                                                   so_masses, so_conf)
-            if is_smash:
-                curr_time = time.asctime()
-                print(
-                    f"\U0001F4BE [{curr_time}] SMASH is finished. "
-                    f"Binary file saved in: {urqmd_file_path}",
-                    flush=True)
-                if so_conf:
-                    status = so_status
-                else:
-                    status = run_smash_analysis(urqmd_file_path,
-                                                final_results_folder,
-                                                event_id,
-                                                analysis_mode="2D")
+            if is_smash and not so_conf:
+                status = run_smash_analysis(urqmd_file_path,
+                                            final_results_folder,
+                                            event_id,
+                                            analysis_mode="2D")
+            elif not run_toolkit:
+                status = so_status
             else:
 
                 # finally collect results
@@ -2306,6 +2325,8 @@ def main(para_dict_):
                 # zip results into a hdf5 database
                 status = zip_results_into_hdf5(final_results_folder, event_id,
                                                para_dict_)
+                if so_conf:
+                    status = status and so_status
 
                 # the freeze-out sample count is only knowable once iSS has run and
                 # the flow analysis has counted the particles, so it is appended to

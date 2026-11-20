@@ -219,6 +219,18 @@ defaults — prefer those over guessing flags.
   whose y→η Jacobian gives a ~25 % mid-rapidity dip and a window-dependent "yield". Use
   identified particles in rapidity for the yield. The `_vndata_diff_y_-0.5_0.5` filename
   suffix is hardcoded and stale — the table is filled over `rap_min..rap_max`.
+- **Tabulated EoS (MUSIC `EOS_to_use 24`) needs MUSIC, iSS and the table.** MUSIC pin `d1323e8`
+  reads it (port of luizafperin/MUSIC); iSS before `24ae580` exits on an EoS number it does not
+  know, which left events without particles that the driver then recorded as fine. The driver now
+  calls an event whose particle list holds no event `particlization_failed`. Tables never go into
+  the chain: `control_dict['EOS_gp_dir']`, and the job ships the one table it needs (20 MB). See
+  "Equation of state from a table" in `docs/chain.md`.
+- **The toolkit tables are off by default** (`control_dict['toolkit_tables']`); the output is
+  `qn_<id>.h5`. A regression against an earlier campaign's `spvn_results_<id>.h5` needs
+  `toolkit_tables = True`.
+- **SMASH runs once per particlization** (all ten iSS calls, one input file each, read in turn by
+  SMASH's List modus): its ~17 s start-up before the first event was paid ten times per event and
+  delta f model before.
 - **UrQMD and SMASH: four traps, fixed together with the standard output** (details in
   `docs/notes/afterburner_rapidity_window.md`). (a) UrQMD continuing events from a file reads
   `rsd` only after seeding itself from the clock, so every run differed; its event header says

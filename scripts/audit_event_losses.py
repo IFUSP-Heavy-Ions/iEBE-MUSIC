@@ -54,12 +54,14 @@ def load_drawn(dpdir):
 
 
 def h5_ids(dpdir):
+    """Events that produced output: the toolkit file (spvn_results_<id>.h5)
+    or the standard output (qn_<id>.h5)."""
     out = set()
-    for f in glob.glob(os.path.join(dpdir, 'spvn_results',
-                                    'spvn_results_*.h5')):
-        m = re.search(r'spvn_results_(\d+)\.h5$', f)
-        if m:
-            out.add(int(m.group(1)))
+    for pattern in ('spvn_results_*.h5', 'qn_*.h5'):
+        for f in glob.glob(os.path.join(dpdir, 'spvn_results', pattern)):
+            m = re.search(r'(?:spvn_results|qn)_(\d+)\.h5$', f)
+            if m:
+                out.add(int(m.group(1)))
     return out
 
 

@@ -87,10 +87,12 @@ clone_repo_at_commit \
 # XSCAPE branch split off before they were merged and ignored the flag), with
 # the bulk inverse Reynolds number of the regulator as |Pi|/(e + P) (upstream
 # chun_dev b2c918a).  Flag 0 (default) is bit-identical to cfcc264.
+# The pin adds the tabulated EoS of luizafperin/MUSIC (EOS_to_use 24, tables
+# outside the chain: control_dict['EOS_gp_dir'], see docs/chain.md).
 clone_repo_at_commit \
   https://github.com/IFUSP-Heavy-Ions/MUSIC.git \
   MUSIC_code \
-  f072672067663ef83f8206af1afd34e4bf21b974 \
+  d1323e844e0bdd0cdf77505e4bf2acdae9bd382d \
   QGP-USP
 
 # download iSS particle sampler
@@ -101,11 +103,12 @@ clone_repo_at_commit \
 # byte-identical to upstream.
 # The pin adds the RTA delta f with tau_R ~ E^gamma of upstream's branch newRTA
 # (never merged there): iss_dict['bulk_deltaf_kind'] = 31 with
-# iss_dict['deltaf_newRTA_gamma'], its coefficient tables inside the repository.
+# iss_dict['deltaf_newRTA_gamma'], its coefficient tables inside the repository,
+# and accepts MUSIC's EOS_to_use 24.
 clone_repo_at_commit \
   https://github.com/IFUSP-Heavy-Ions/iSS.git \
   iSS_code \
-  bbc4f9e698a2010cf799d2ee643f547c970a5afa \
+  24ae5806e71ef553b108cbe5b40344cee7460254 \
   QGP-USP
 if ! grep -q "deltaf_model_" iSS_code/src/FSSW.cpp; then
   echo "ERROR: iSS_code does not carry the PTB delta f" >&2

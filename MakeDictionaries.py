@@ -53,6 +53,14 @@ Design-matrix columns (csv.DictReader; every one is required unless noted):
                        own gamma (model name `RTA`), unless --deltaf-models
                        says otherwise.
 
+Tabulated equation of state (MUSIC EOS_to_use 24, docs/chain.md): optional
+columns EOS_gp_sample (s0, s1, ... or just the number), EOS_gp_type (hrg, pwr,
+w), EOS_gp_l, EOS_gp_sigma, T_sw [MeV], gp_type (constrained, unconstrained,
+training), EOS_gp_mean select the table per design point; any of them switches
+the design point to EOS_to_use 24.  The tables themselves stay outside the
+chain: --eos-gp-dir sets control_dict['EOS_gp_dir'], the folder that holds
+EOS-gp/.
+
 Viscous corrections at particlization (--deltaf-models): every hydro surface
 is particlized once per model, with the same seeds, into the group
 deltaf_<name> of the event file.  Without the option (and without a
@@ -390,6 +398,12 @@ def parse_args() -> argparse.Namespace:
         "with: Grad22, CE, PTB, RTA (gamma from the design column "
         "deltaf_newRTA_gamma), RTA<nnn> (gamma = nnn/100), or 'none'. "
         "Default: the template's list, or RTA if the design has the column.",
+    )
+    parser.add_argument(
+        "--eos-gp-dir",
+        default=None,
+        help="Folder holding EOS-gp/ (tables of MUSIC's EOS_to_use 24); "
+        "written to control_dict['EOS_gp_dir'].",
     )
     args = parser.parse_args()
     if args.design_flag is not None:
@@ -894,6 +908,32 @@ def set_deltaf_models(config: dict, row: dict[str, str],
     config["control_dict"]["deltaf_models"] = models
 
 
+EOS_GP_COLUMNS = {
+    "EOS_gp_sample": str, "EOS_gp_type": str, "EOS_gp_l": int,
+    "EOS_gp_sigma": int, "T_sw": int, "gp_type": str, "EOS_gp_mean": str,
+}
+
+
+def set_eos_gp(config: dict, row: dict[str, str],
+               eos_gp_dir: str | None) -> None:
+    """Tabulated EoS of one design point from optional design columns."""
+    given = {k: str(row[k]).strip() for k in EOS_GP_COLUMNS
+             if str(row.get(k, "")).strip()}
+    if eos_gp_dir:
+        config["control_dict"]["EOS_gp_dir"] = eos_gp_dir
+    if not given:
+        return
+    music = config["music_dict"]
+    music["EOS_to_use"] = 24
+    for key, value in given.items():
+        if EOS_GP_COLUMNS[key] is int:
+            music[key] = int(round(float(value)))
+        elif key == "EOS_gp_sample" and value.replace(".", "", 1).isdigit():
+            music[key] = "s%d" % int(float(value))
+        else:
+            music[key] = value
+
+
 def main() -> None:
     args = parse_args()
     cwd = Path.cwd()
@@ -961,6 +1001,7 @@ def main() -> None:
 
         update_template_values(config, row)
         set_deltaf_models(config, row, args.deltaf_models)
+        set_eos_gp(config, row, args.eos_gp_dir)
 
         dir_name = f"DesignPoint{one_based_index}"
         point_dir = output_dir/dir_name

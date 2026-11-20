@@ -37,6 +37,10 @@ control_dict = {
     # (1.25 units leaves <= 0.2 % in yields and <pT>, see
     # docs/notes/afterburner_rapidity_window.md).
     'standard_output': True,
+    # also write the hadronic_afterburner_toolkit tables, spvn_results_<id>.h5
+    # (the only output before the standard one; still read by the adapter for
+    # earlier campaigns).  Off by default since 2026-11-20.
+    'toolkit_tables': False,
     'afterburner_y_cut': None,
     'afterburner_edge_margin': 1.25,
     'EOSType': 0,

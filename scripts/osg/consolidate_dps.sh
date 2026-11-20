@@ -22,6 +22,9 @@ LIST=${1:-}
 PROD=${IBEM_PROD:-/data/mluzum/ge76_results/prod}
 OUT=${IBEM_OUT:-/data/mluzum/ge76_results/merged}
 MERGE=${IBEM_MERGE:-$(cd "$(dirname "$0")/.." && pwd)/merge_dp_h5.py}
+MERGE_QN=${IBEM_MERGE_QN:-$(cd "$(dirname "$0")/.." && pwd)/merge_qn.py}
+# importance-sampled design points: the select_events.py files, selection_<dp>.*
+SELECTION_DIR=${IBEM_SELECTION_DIR:-}
 # Per-invocation temp dir: a fixed path is shared by every concurrent pass, so two
 # of them clobber each other's worklist and extraction directory.
 TMP=$(mktemp -d /tmp/opencode/merge_tmp.XXXXXX) || exit 1
@@ -92,7 +95,7 @@ one() {
   n=$(src_total "$d")
   if [ "$n" -lt "$MIN_SOURCES" ]; then echo "$dp SKIP sources=$n"; return; fi
   if ! batch_complete "$n"; then echo "$dp SKIP partial_batch n=$n"; return; fi
-  if [ -s "$odir/$dp.h5" ] && [ "$(cat "$odir/sources.txt" 2>/dev/null)" = "$fp" ]; then
+  if { [ -s "$odir/$dp.h5" ] || [ -s "$odir/qn_$dp.h5" ]; } && [ "$(cat "$odir/sources.txt" 2>/dev/null)" = "$fp" ]; then
     echo "$dp up-to-date ($fp)"; return
   fi
   rm -rf "$tmpd"; mkdir -p "$tmpd"
@@ -134,10 +137,25 @@ one() {
   fi
   if [ -z "$src" ] || [ ! -d "$src" ]; then echo "$dp NO_SOURCE"; rm -rf "$tmpd"; return; fi
   mkdir -p "$odir"
-  if ! python3 "$MERGE" "$src" "$odir/$dp.h5.tmp" > "$odir/merge.log" 2>&1; then
-    echo "$dp MERGE_FAILED"; rm -f "$odir/$dp.h5.tmp"; rm -rf "$tmpd"; return
+  if ls "$src"/qn_*.h5 >/dev/null 2>&1; then
+    # standard output (docs/standard_output.md): only qn_<dp>.h5, because the
+    # adapter refuses a directory holding both formats
+    sel=""
+    if [ -n "${SELECTION_DIR:-}" ] && [ -f "$SELECTION_DIR/selection_$dp.csv" ]; then
+      sel="--selection $SELECTION_DIR/selection_$dp"
+    fi
+    if ! python3 "$MERGE_QN" "$src" "$odir/qn_$dp.h5" $sel > "$odir/merge.log" 2>&1; then
+      echo "$dp MERGE_FAILED"; rm -rf "$tmpd"; return
+    fi
+    rm -f "$odir/$dp.h5"
+    out_h5=$odir/qn_$dp.h5
+  else
+    if ! python3 "$MERGE" "$src" "$odir/$dp.h5.tmp" > "$odir/merge.log" 2>&1; then
+      echo "$dp MERGE_FAILED"; rm -f "$odir/$dp.h5.tmp"; rm -rf "$tmpd"; return
+    fi
+    mv "$odir/$dp.h5.tmp" "$odir/$dp.h5"
+    out_h5=$odir/$dp.h5
   fi
-  mv "$odir/$dp.h5.tmp" "$odir/$dp.h5"
   # Recompute: a quarantined archive changes the count, and recording the stale
   # fingerprint would make the next pass re-merge the same point forever.
   fp=$(src_fingerprint "$d")
@@ -146,8 +164,8 @@ one() {
     ( cd "$src" && tar czf "$odir/csv.tgz" events_drawn_*.csv ) || echo "$dp CSV_TAR_FAILED"
   fi
   rm -rf "$tmpd"
-  echo "$dp DONE $(du -h "$odir/$dp.h5" | cut -f1) sources=$n [$fp]"
+  echo "$dp DONE $(du -h "$out_h5" | cut -f1) sources=$n [$fp]"
 }
-export -f one src_fingerprint src_total batch_complete; export MIN_SOURCES export PROD OUT MERGE TMP
+export -f one src_fingerprint src_total batch_complete; export MIN_SOURCES export PROD OUT MERGE MERGE_QN SELECTION_DIR TMP
 xargs -r -P 2 -n 1 bash -c 'one "$0"' < "$LIST"
 echo CONSOLIDATION_DONE

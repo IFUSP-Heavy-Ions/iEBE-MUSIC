@@ -25,6 +25,27 @@ def find_repo_root():
     return None
 
 
+def detect_eos_gp_table(param_file):
+    """The table of MUSIC's tabulated EoS (EOS_to_use 24) that this parameter
+    file needs, or None.  The table is shipped with every job; on the worker
+    generate_jobs.py finds it in the job folder (see find_eos_gp_table)."""
+    import runpy
+    try:
+        ns = runpy.run_path(param_file)
+    except Exception:
+        return None
+    music = {k: str(v) for k, v in dict(ns.get("music_dict", {})).items()}
+    if int(float(music.get("EOS_to_use", 9))) != 24:
+        return None
+    root = find_repo_root()
+    sys.path.insert(0, root)
+    import generate_jobs  # for its table lookup only
+    table, _ = generate_jobs.find_eos_gp_table(
+        music, dict(ns.get("control_dict", {})).get("EOS_gp_dir"),
+        path.join(root, "codes"))
+    return table
+
+
 def detect_afterburner(param_file):
     """Return afterburner_type string read from the parameter file."""
     try:
@@ -206,6 +227,9 @@ Requirements = TARGET.HasSingularity && StringListIMember("stash", HasFileTransf
 """.format(jobName, singularity_image_url))
 
     input_files = [para_dict_['param_file']]
+    eos_table = detect_eos_gp_table(para_dict_['param_file'])
+    if eos_table:
+        input_files.append(eos_table)
     if para_dict_['bayesFlag']:
         input_files.append(para_dict_['bayes_file'])
     if seed_file:
@@ -603,6 +627,9 @@ Requirements = TARGET.HasSingularity && StringListIMember("stash", HasFileTransf
 """.format(jobName, imagePathHeader + para_dict_["singularity_image_path"]))
 
     input_files = [para_dict_['param_file']]
+    eos_table = detect_eos_gp_table(para_dict_['param_file'])
+    if eos_table:
+        input_files.append(eos_table)
     if para_dict_['bayesFlag']:
         input_files.append(para_dict_['bayes_file'])
     if seed_file:

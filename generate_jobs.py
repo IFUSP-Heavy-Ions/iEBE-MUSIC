@@ -3,6 +3,7 @@
 
 import sys
 import re
+import os
 from os import path, mkdir, remove
 import shutil
 import subprocess
@@ -719,24 +720,43 @@ done
 done
         """)
     elif afterburner_type == "SMASH":
-        # One SMASH run per iSS call: as many events as iSS wrote (the number
-        # depends on the event), the iSS seed, and a fixed output folder that
-        # is overwritten (SMASH would otherwise number new folders data/1,
-        # data/2, ... and data/0 would be read every time).  The outputs are
-        # appended; codes/standard_output.py reads concatenated SMASH files.
+        # One SMASH run per particlization (all ten iSS calls together):
+        # SMASH spends ~17 s before its first event and ~0.2 s per event, so
+        # ten runs cost ten start-ups.  Each iSS call's events go to their own
+        # input file, OSCAR.DAT0, OSCAR.DAT1, ..., which SMASH's List modus
+        # reads in turn; the event count is what iSS actually wrote, the seed
+        # follows the iSS seeds, and the output folder is fixed and
+        # overwritten (SMASH would otherwise number new folders data/1, ...).
         script.write("""
+    if [ $iev -eq 0 ]; then
+        rm -f ../SMASH/list/OSCAR.DAT*
+        nfile=0
+        ntot=0
+    fi
     nev=`grep -c "^# event [0-9]* out" OSCAR.DAT`
-    mv OSCAR.DAT ../SMASH/list/OSCAR.DAT0
-    cd ../SMASH
-    sed -e "s/^\\( *Nevents:\\).*/\\1 $nev/" \\
-        -e "s/^\\( *Randomseed:\\).*/\\1 $((RANDOMSEED % 2147483647))/" \\
+    if [ "$nev" -gt 0 ]; then
+        mv OSCAR.DAT ../SMASH/list/OSCAR.DAT$nfile
+        nfile=$((nfile + 1))
+        ntot=$((ntot + nev))
+    fi
+    rm -f OSCAR.DAT
+    cd ..
+done
+SMASHSEED=$(( (BASESEED + SubEventId * 1000003) % 2147483647 ))
+if [ "$ntot" -gt 0 ]; then
+    cd SMASH
+    sed -e "s/^\\( *Nevents:\\).*/\\1 $ntot/" \\
+        -e "s/^\\( *Randomseed:\\).*/\\1 $SMASHSEED/" \\
         list/config.yaml > list/config_run.yaml
     unset PYTHIA8DATA
     ./smash -i list/config_run.yaml -o run_output -f > run.log
     cd ..
-    cat SMASH/run_output/particles_oscar2013_extended.bin >> {results_dir}/particle_list.bin
-    rm -fr SMASH/run_output SMASH/list/OSCAR.DAT0
-done
+    mv SMASH/run_output/particles_oscar2013_extended.bin {results_dir}/particle_list.bin
+    rm -fr SMASH/run_output SMASH/list/OSCAR.DAT*
+else
+    # nothing to transport: an empty list, which the driver reports
+    touch {results_dir}/particle_list.bin
+fi
 """.format(results_dir=results_dir))
     if HBT_flag:
         script.write("""
@@ -783,6 +803,73 @@ def generate_script_analyze_spvn(folder_name, HBT_flag, logfile):
         )
     script.write(")\n")
     script.close()
+
+
+def read_music_input(fname):
+    """{key: value string} of a MUSIC input file (up to EndOfData)."""
+    out = {}
+    for line in open(fname):
+        line = line.split("#")[0].split()
+        if not line:
+            continue
+        if line[0].lower() == "endofdata":
+            break
+        if len(line) >= 2:
+            out[line[0]] = line[1]
+    return out
+
+
+def eos_gp_table_relpath(music):
+    """The table MUSIC's EOS_to_use 24 reads, relative to EOS/EOS-gp; the
+    defaults are MUSIC's (src/read_in_parameters.cpp)."""
+    l = int(float(music.get("EOS_gp_l", 400)))
+    sigma = int(float(music.get("EOS_gp_sigma", 15)))
+    t_sw = int(float(music.get("T_sw", 150)))
+    gp_type = music.get("gp_type", "constrained")
+    rel = ["Tsw_%d" % t_sw, gp_type]
+    if gp_type == "unconstrained":
+        rel.append(music.get("EOS_gp_mean", "0_3"))
+    rel += ["l%d_s%d" % (l, sigma),
+            "eos_%s_%s_l%d_s%d.dat" % (music.get("EOS_gp_type", "hrg"),
+                                       music.get("EOS_gp_sample", "s0"),
+                                       l, sigma)]
+    return path.join(*rel)
+
+
+def find_eos_gp_table(music, eos_gp_dir, code_path):
+    """Path of the EOS_to_use 24 table, or raise.  Looked for in
+    control_dict['EOS_gp_dir'] (a folder holding EOS-gp/ as laid out by
+    MUSIC's EOS/download_EOS-gp.sh, or the table itself), then in the code's
+    MUSIC_code/EOS, then -- on a grid worker, where the table arrives in the
+    job folder -- in the working directory."""
+    rel = eos_gp_table_relpath(music)
+    candidates = []
+    for base in [eos_gp_dir, path.join(code_path, "MUSIC_code", "EOS"), "."]:
+        if not base:
+            continue
+        candidates += [path.join(base, "EOS-gp", rel), path.join(base, rel),
+                       path.join(base, path.basename(rel))]
+    for c in candidates:
+        if path.isfile(c):
+            return path.abspath(c), rel
+    raise FileNotFoundError(
+        "EOS_to_use 24: table EOS-gp/{} not found (looked in {}); set "
+        "control_dict['EOS_gp_dir'] to the folder that holds EOS-gp/".format(
+            rel, ", ".join(sorted(set(path.dirname(c) for c in candidates)))))
+
+
+def link_eos_gp(event_folder, code_path, table, rel):
+    """MUSIC/EOS of the event as a folder: the code's EOS entries plus
+    EOS-gp/<rel> -> the table."""
+    eos_dir = path.join(event_folder, "MUSIC", "EOS")
+    mkdir(eos_dir)
+    code_eos = path.abspath(path.join(code_path, "MUSIC_code", "EOS"))
+    for name in os.listdir(code_eos):
+        if name != "EOS-gp":
+            os.symlink(path.join(code_eos, name), path.join(eos_dir, name))
+    target = path.join(eos_dir, "EOS-gp", rel)
+    os.makedirs(path.dirname(target))
+    os.symlink(table, target)
 
 
 def chain_revision():
@@ -837,6 +924,9 @@ def write_standard_output_conf(event_folder, param_folder, para_dict,
         # the sampled range minus edge_margin on each side
         "y_cut": control.get('afterburner_y_cut'),
         "edge_margin": control.get('afterburner_edge_margin', 1.25),
+        # also write the hadronic_afterburner_toolkit tables
+        # (spvn_results_<id>.h5), as before the standard output existed
+        "toolkit_tables": bool(control.get('toolkit_tables', False)),
         "root_attrs": root,
     }
     with open(path.join(event_folder, 'standard_output.json'), 'w') as f:
@@ -1033,7 +1123,20 @@ def generate_event_folders(initial_condition_database, initial_condition_type,
     targetFile = path.join(code_path, 'MUSIC_code/MUSIChydro')
     desLoc = path.join(event_folder, "MUSIC/MUSIChydro")
     subprocess.call(f"ln -s {targetFile} {desLoc}", shell=True)
-    if EOSType != 42:
+    music_input = read_music_input(
+        path.join(param_folder, 'MUSIC/music_input_mode_2'))
+    if int(float(music_input.get("EOS_to_use", 9))) == 24:
+        # tabulated EoS: the one table this run reads, from outside the chain
+        table, rel = find_eos_gp_table(
+            music_input, para_dict.control_dict.get('EOS_gp_dir'), code_path)
+        link_eos_gp(event_folder, code_path, table, rel)
+        t_freeze = music_input.get("T_freeze")
+        if t_freeze and (1000.*float(t_freeze)
+                         > float(music_input.get("T_sw", 150))):
+            print("WARNING: T_freeze = {} GeV is above the EoS table's "
+                  "switching temperature T_sw = {} MeV".format(
+                      t_freeze, music_input.get("T_sw", 150)))
+    elif EOSType != 42:
         targetFile = path.join(code_path, 'MUSIC_code/EOS')
         desLoc = path.join(event_folder, "MUSIC/EOS")
         subprocess.call(f"ln -s {targetFile} {desLoc}", shell=True)

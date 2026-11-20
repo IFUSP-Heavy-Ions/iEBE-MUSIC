@@ -52,8 +52,8 @@ Three layers, all immutable by construction:
 |---|---|---|---|
 | `isobar_sampler_code` | `github.com/mluzum/Isobar-Sampler` (`QGP-USP`) | `b5eab93` | deterministic seeds, faster sampler, fluctuating deformation, many events per call, on top of `Public_Release` `bc586de` |
 | `trento_code` | `github.com/IFUSP-Heavy-Ions/trento` (`QGP-USP`) | `54aa461` | nucleon-configuration interface, event-id mode, on top of Duke-QCD `10960b2` |
-| `MUSIC_code` | `github.com/IFUSP-Heavy-Ions/MUSIC` (`QGP-USP`) | `f072672` | resummed transport coefficients (`FlagResumTransportCoeff`, off by default), on top of upstream `XSCAPE` `cfcc264` |
-| `iSS_code` | `github.com/IFUSP-Heavy-Ions/iSS` (`QGP-USP`) | `bbc4f9e` | PTB delta f and the RTA delta f with τ_R ∝ E^γ (upstream branch `newRTA`), on top of upstream `XSCAPE` `d242555` |
+| `MUSIC_code` | `github.com/IFUSP-Heavy-Ions/MUSIC` (`QGP-USP`) | `d1323e8` | resummed transport coefficients (`FlagResumTransportCoeff`, off by default) and the tabulated EoS 24 of luizafperin/MUSIC, on top of upstream `XSCAPE` `cfcc264` |
+| `iSS_code` | `github.com/IFUSP-Heavy-Ions/iSS` (`QGP-USP`) | `24ae580` | PTB delta f and the RTA delta f with τ_R ∝ E^γ (upstream branch `newRTA`), on top of upstream `XSCAPE` `d242555` |
 | `hadronic_afterburner_toolkit_code` | `github.com/IFUSP-Heavy-Ions/hadronic_afterburner_toolkit` (`QGP-USP`) | `d00b6c9` | boost-invariant dN/dy, on top of upstream `2326ba2` |
 | `3dMCGlauber_code` | `github.com/mluzum/3dMCGlauber` | `1d9856c` | (optional backend) |
 | `ipglasma_code` | `github.com/chunshen1987/ipglasma` | `bf92fe1` | (optional backend) |
@@ -176,6 +176,26 @@ user dictionary is merged into it by `dict.update()`. Two consequences:
 - if the chain needs a new knob, add it to the master *and* to `MakeDictionaries.py`,
   then to the generated input files.
 
+### Equation of state from a table (MUSIC `EOS_to_use 24`)
+
+MUSIC can read one table of a Gaussian-process EoS ensemble at mu_B = 0 (from
+Luiza Perin's MUSIC fork; tables in `github.com/luizafperin/MUSIC-EOS-data`,
+never in the chain). In `music_dict`: `EOS_to_use = 24` and `EOS_gp_l`,
+`EOS_gp_sigma`, `T_sw` [MeV], `EOS_gp_type` (hrg, pwr, w), `EOS_gp_sample`
+(s0, s1, ...), `gp_type` (constrained, unconstrained, training),
+`EOS_gp_mean` (unconstrained only), with MUSIC's defaults 400, 15, 150, hrg,
+s0, constrained, 0_3. In `control_dict`: `EOS_gp_dir`, the folder that holds
+`EOS-gp/` as MUSIC's `EOS/download_EOS-gp.sh` lays it out. `generate_jobs.py`
+links the one table an event needs into its `MUSIC/EOS/EOS-gp/`; the OSG
+generator and `stage_campaign.py` ship that table (~20 MB) with every job,
+and on the worker it is found in the job folder. `MakeDictionaries.py` takes
+the same names as optional design columns (and `--eos-gp-dir`). iSS has to
+accept the number too (iSS pin `24ae580`). Keep `T_freeze` below `T_sw`
+(generate_jobs.py warns): above it the freeze-out falls in the part of the
+table that is not the hadron gas iSS samples. A run with a table takes about
+40 % longer than with `EOS_to_use 9` (each lookup searches a 175,000-row
+non-uniform table).
+
 ### Viscous corrections at particlization (delta f)
 
 Which delta f iSS samples with is set by three `iss_dict` keys:
@@ -217,8 +237,11 @@ Next to it, `qn_<id>.h5` is the standard per-event output
 (`docs/standard_output.md`, written by `codes/standard_output.py` for every
 afterburner; SMASH events have only this file): exact per-species, per-pT-bin
 sums of the final particles, which `scripts/merge_qn.py` merges into one dense
-`qn_dpNNNN.h5` per design point. Until it has been validated in a campaign both
-are written; afterwards the toolkit tables go.
+`qn_dpNNNN.h5` per design point. Since 2026-11-20 the toolkit tables are no
+longer written (`control_dict['toolkit_tables'] = True` brings them back,
+e.g. to compare with an earlier campaign); `scripts/osg/consolidate_dps.sh`
+merges whichever format a design point has, and only one of them, because the
+analysis adapter refuses a folder holding both.
 Per job, one tarball with 20 event h5 files (both kinds) plus the TRENTo
 summaries, grid extents and `events_drawn_<proc>.csv`.
 
