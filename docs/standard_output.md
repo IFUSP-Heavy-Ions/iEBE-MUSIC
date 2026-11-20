@@ -1,8 +1,8 @@
 # Standard per-event output (draft, format version 1, 2D)
 
-**Status: draft for review** by the user and the soft-sector analysis
-(`soft-sector-data-curation`, adapter `sim_adapters/iebe_music.py`). Nothing in
-the chain writes this yet.
+**Status:** layout agreed with the soft-sector analysis
+(`soft-sector-data-curation`; its reader will live in `soft-sector-sim-adapters`)
+on 2026-11-20. Nothing in the chain writes it yet.
 
 The goal is one output that serves the decays-only path, UrQMD and SMASH alike,
 carries the exact sums the analysis needs (instead of tables it has to rebuild
@@ -31,17 +31,24 @@ Sums are raw: not divided by the number of oversamples or by any width.
 Accumulation is in float64; storage is complex64 / float32 (counts are exact
 below 2^24 per cell).
 
-**Species rows** (`/grid/species_pdg`): pi+ 211, pi- -211, K+ 321, K- -321,
+**Species rows** (`/grid/species_pdg`, with `/grid/species_mass` and
+`/grid/species_charge`), 15 disjoint rows: pi+ 211, pi- -211, K+ 321, K- -321,
 p 2212, pbar -2212, Lambda 3122, anti-Lambda -3122, Xi- 3312, anti-Xi+ -3312,
-Omega- 3334, anti-Omega+ -3334, K0 311, anti-K0 -311. **All charged hadrons**
-are a separate set of datasets with the suffix `_ch`: every final particle with
-non-zero electric charge, so it is exact and not a sum of the rows (it includes
-Sigma+-, light nuclei if a code produces them, etc.). Do not add the rows to it.
+Omega- 3334, anti-Omega+ -3334, K0 311, anti-K0 -311, and **0 = other
+charged**: every charged final particle not in another row (Sigma+-, their
+antiparticles, light nuclei if a code makes them, anything else). All charged
+hadrons are the sum of the rows with non-zero `species_charge`, exactly. Each
+row is cut in eta with its own mass (the y -> eta Jacobian); the other-charged
+row is Sigma-dominated and about 1-2 % of charged, and its mass is recorded as
+the Sigma+ mass, 1.1894 GeV. The masses of the named rows are those of the
+particle table the code used.
 
 **pT bins** (`/grid/pt_edges`, GeV): 0 to 3 in steps of 0.05 with an extra edge
 at 0.27, then 3 to 5 in steps of 0.25, then one bin 5 to 10. 70 bins. Particles
-above 10 GeV are not summed. The cuts in use (0.15, 0.2, 0.27, 0.3, 0.5, 2, 3,
-5) are all edges.
+above 10 GeV are not summed. The edges are written as the float64 values of
+those decimals (not accumulated steps), and the code bins on exactly the array
+it writes. The cuts in use (0.15, 0.2, 0.27, 0.3, 0.4, 0.45, 0.5, 2, 3, 4.5, 5)
+are all edges.
 
 **Final state.** Hadrons stable under strong and electromagnetic interactions,
 no weak decays: K0 and anti-K0 are stored as such (K0S = half their sum), and
@@ -72,7 +79,9 @@ one for the other). Every dataset with an event axis has it first, chunked by
                               campaign is importance-sampled (section 5)
 /grid/
     pt_edges           [71]           float64
-    species_pdg        [14]           int32
+    species_pdg        [15]           int32   0 = other charged
+    species_mass       [15]           float64 GeV
+    species_charge     [15]           int32
     harmonics          [11]           int32   0..10 (Q); Qpt carries 1..3
     y_profile_edges    [ny+1]         float64
 /events/               one row per collided event that reached particlization
@@ -98,16 +107,12 @@ one for the other). Every dataset with an event axis has it first, chunked by
     attrs: iss_overrides (as in campaign 2), bulk_deltaf_kind, deltaf_model,
            deltaf_newRTA_gamma (effective values, always written),
            y_sampled = [y_LB, y_RB], collection = "all" | "window",
-           y_cut, dy_width (section 3)
+           y_cut, dy_width (section 3), sums = "raw over nsamples"
     nsamples           [E]                 int32
-    Q                  [E, 14, 11, 70]     complex64
-    ptsum              [E, 14, 4, 70]      float32
-    mtsum              [E, 14, 70]         float32
-    Qpt                [E, 14, 3, 70]      complex64
-    Q_ch               [E, 11, 70]         complex64
-    ptsum_ch           [E, 4, 70]          float32
-    mtsum_ch           [E, 70]             float32
-    Qpt_ch             [E, 3, 70]          complex64
+    Q                  [E, 15, 11, 70]     complex64
+    ptsum              [E, 15, 4, 70]      float32
+    mtsum              [E, 15, 70]         float32
+    Qpt                [E, 15, 3, 70]      complex64
     y_profile          [E, ny, 4]          float32   charged: N, sum pT,
                                                      Re and Im of sum exp(2i phi)
 ```
