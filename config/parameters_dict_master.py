@@ -678,6 +678,12 @@ photon_dict = {
 iss_dict = {
     'hydro_mode': 2,  # mode for reading in freeze out information
     'afterburner_type': 1,  # 0: PDG_Decay, 1: UrQMD, 2: SMASH
+    # hadron list iSS samples, decays and takes its hadron gas (regulateEOS)
+    # from: 0 the afterburner's (urqmd_v3.3+ for UrQMD and decays only,
+    # SMASH's for SMASH); 21 PDG2021+ (arXiv:2309.01737, 761 species), for
+    # decays only or SMASH (which then reads the same list); not with UrQMD,
+    # whose species are fixed.  The hydro EoS should come from the same list.
+    'particle_list': 0,
     'turn_on_bulk': 0,  # read in bulk viscous pressure
     'turn_on_rhob': 0,  # read in net baryon chemical potential
     'turn_on_diff': 0,  # read in baryon diffusion current
@@ -1173,7 +1179,10 @@ def update_parameters_dict(par_dict_path, ran_seed):
     if hasattr(parameters_dict, 'smash_config_dict'):
         smash_config_dict.update(parameters_dict.smash_config_dict)
     if afterburner_type_str == "smash":
-        music_dict['EOS_to_use'] = 91
+        # HotQCD matched to SMASH's hadron gas, unless a tabulated EoS (24) was
+        # chosen, which is then the user's to build from the right list
+        if music_dict['EOS_to_use'] != 24:
+            music_dict['EOS_to_use'] = 91
         iss_dict['afterburner_type'] = 2
         iss_dict['output_samples_into_files'] = 1
         iss_dict['store_samples_in_memory'] = 0
@@ -1181,6 +1190,14 @@ def update_parameters_dict(par_dict_path, ran_seed):
         iss_dict['use_OSCAR2013'] = 1
         iss_dict['use_binary_format'] = 0
         iss_dict['perform_decays'] = 0
+    particle_list = int(iss_dict.get('particle_list', 0))
+    if particle_list not in (0, 21):
+        raise ValueError("iss_dict['particle_list'] = %s: 0 (the afterburner's"
+                         " list) or 21 (PDG2021+)" % particle_list)
+    if particle_list == 21 and afterburner_type_str == "urqmd":
+        raise ValueError("iss_dict['particle_list'] = 21 (PDG2021+) runs with"
+                         " afterburner 'decay' or 'SMASH'; UrQMD's species"
+                         " are fixed")
     ###################################################################################
 
 

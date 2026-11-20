@@ -353,6 +353,21 @@ defaults — prefer those over guessing flags.
 - **Toolkit pT bins are edges pT_min + i (pT_max - pT_min)/npT** (`single_particleSpectra.cpp`:
   dpT = (pT_max - pT_min)/npT, centre pT_min + (i + 0.5) dpT). The first campaigns' 0.2-2.0 /
   41 gave 0.0439 GeV bins; the campaign2 template uses 0-5 GeV / 100 (0.05 GeV edges).
+- **Decays-only yields before iSS pin `67f4a4f` are ~2 % low.** iSS's decayer handled only
+  two- and three-body channels and silently dropped the mother for anything else: the 21
+  four-body channels and the 45 channels the UrQMD table marks closed at the pole masses
+  (negative daughter count). Measured on the one-cell test surface: π± −2.1 %, K −1.3 %,
+  p −1.1 %, Λ −0.75 %, each matching the analytic feed-down of the dropped channels. Every
+  decays-only campaign so far (zr96/ge76 campaigns 1 and 2) has it; flow coefficients are
+  barely affected, yields and ratios are. The fixed decayer honours the table's branching
+  ratios (closed channels opened through the daughters' Breit-Wigner tails, see
+  `docs/chain.md`), and was checked against exact phase-space marginals (3-5 bodies), the
+  analytic feed-down of every species of both lists, and exact E, p, Q, B, S conservation.
+- **`iss_dict['particle_list'] = 21` (PDG2021+) needs a matching EoS.** The list is fetched at
+  build time (GPL-3; never commit `pdg-PDG2021Plus.dat` or the SMASH files). EoS 9/91 come
+  from other hadron lists, so particlization with PDG2021+ is slightly inconsistent until a
+  tabulated EoS (24) built from PDG2021+ is used. With SMASH the master now keeps
+  `EOS_to_use 24` instead of forcing 91.
 - **Test framework changes in the image before building one.** `scripts/rerun_events_local.py`
   re-runs any campaign event in the job folder it originally ran in (same seeds); `--bind`
   mounts a modified file (driver, generate_jobs, master, a patched iSS.e) over the image's,

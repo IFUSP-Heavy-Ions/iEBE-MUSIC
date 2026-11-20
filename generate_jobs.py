@@ -749,7 +749,12 @@ if [ "$ntot" -gt 0 ]; then
         -e "s/^\\( *Randomseed:\\).*/\\1 $SMASHSEED/" \\
         list/config.yaml > list/config_run.yaml
     unset PYTHIA8DATA
-    ./smash -i list/config_run.yaml -o run_output -f > run.log
+    # a particle list of its own (iss_dict particle_list 21) is linked here
+    SMASH_LIST=""
+    if [ -e particles.txt ]; then
+        SMASH_LIST="-p particles.txt -d decaymodes.txt"
+    fi
+    ./smash -i list/config_run.yaml $SMASH_LIST -o run_output -f > run.log
     cd ..
     mv SMASH/run_output/particles_oscar2013_extended.bin {results_dir}/particle_list.bin
     rm -fr SMASH/run_output SMASH/list/OSCAR.DAT*
@@ -891,23 +896,31 @@ def chain_revision():
     return "unknown"
 
 
+def read_iss_parameter(param_folder, key, default):
+    """An integer parameter of the generated iSS_parameters.dat."""
+    iss_par = path.join(param_folder, 'iSS', 'iSS_parameters.dat')
+    try:
+        for line in open(iss_par):
+            if line.split("#")[0].split("=")[0].strip() == key:
+                return int(float(line.split("#")[0].split("=")[1]))
+    except (OSError, ValueError, IndexError):
+        pass
+    return default
+
+
 def write_standard_output_conf(event_folder, param_folder, para_dict,
                                afterburner_type):
     """standard_output.json for the driver."""
     control = para_dict.control_dict
     if not control.get('standard_output', True):
         return
-    iss_ab = 1
-    iss_par = path.join(param_folder, 'iSS', 'iSS_parameters.dat')
-    try:
-        for line in open(iss_par):
-            if line.split("#")[0].split("=")[0].strip() == "afterburner_type":
-                iss_ab = int(float(line.split("#")[0].split("=")[1]))
-    except (OSError, ValueError, IndexError):
-        pass
-    # the particle table iSS reads for that afterburner_type
-    table = {2: "pdg-SMASH.dat", 1: "pdg-urqmd_v3.3+.dat"}.get(
-        iss_ab, "pdg-s95pv1.dat")
+    iss_ab = read_iss_parameter(param_folder, "afterburner_type", 1)
+    # the particle table iSS reads (iSS's particle_list_name())
+    if read_iss_parameter(param_folder, "particle_list", 0) == 21:
+        table = "pdg-PDG2021Plus.dat"
+    else:
+        table = {2: "pdg-SMASH.dat", 1: "pdg-urqmd_v3.3+.dat"}.get(
+            iss_ab, "pdg-s95pv1.dat")
     root = {"chain_revision": chain_revision(),
             "parameter_file": path.basename(
                 getattr(para_dict, '__file__', '') or '')}
@@ -1317,6 +1330,21 @@ def generate_event_folders(initial_condition_database, initial_condition_type,
                             shell=True)
             shutil.copyfile(path.join(param_folder, 'SMASH/config.yaml'),
                             path.join(smash_list_dir, 'config.yaml'))
+            if read_iss_parameter(param_folder, "particle_list", 0) == 21:
+                # SMASH transports the PDG2021+ species iSS sampled
+                pdg21 = path.abspath(path.join(code_path,
+                                               'smash_code/PDG2021Plus'))
+                for src, dst in (
+                        ("PDG2021Plus-1.0_particles.txt", "particles.txt"),
+                        ("PDG2021Plus-1.0_intermediate_decaymodes.txt",
+                         "decaymodes.txt")):
+                    if not path.isfile(path.join(pdg21, src)):
+                        print("Error: %s is missing; run "
+                              "codes/get_code_packages.sh" %
+                              path.join(pdg21, src))
+                        exit(1)
+                    os.symlink(path.join(pdg21, src),
+                               path.join(smash_dir, dst))
         #######################################################################
         if HBT_flag:
             shutil.copytree(

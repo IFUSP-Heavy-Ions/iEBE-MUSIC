@@ -53,7 +53,7 @@ Three layers, all immutable by construction:
 | `isobar_sampler_code` | `github.com/mluzum/Isobar-Sampler` (`QGP-USP`) | `b5eab93` | deterministic seeds, faster sampler, fluctuating deformation, many events per call, on top of `Public_Release` `bc586de` |
 | `trento_code` | `github.com/IFUSP-Heavy-Ions/trento` (`QGP-USP`) | `54aa461` | nucleon-configuration interface, event-id mode, on top of Duke-QCD `10960b2` |
 | `MUSIC_code` | `github.com/IFUSP-Heavy-Ions/MUSIC` (`QGP-USP`) | `d1323e8` | resummed transport coefficients (`FlagResumTransportCoeff`, off by default) and the tabulated EoS 24 of luizafperin/MUSIC, on top of upstream `XSCAPE` `cfcc264` |
-| `iSS_code` | `github.com/IFUSP-Heavy-Ions/iSS` (`QGP-USP`) | `24ae580` | PTB delta f and the RTA delta f with τ_R ∝ E^γ (upstream branch `newRTA`), on top of upstream `XSCAPE` `d242555` |
+| `iSS_code` | `github.com/IFUSP-Heavy-Ions/iSS` (`QGP-USP`) | `0926acb` | PTB delta f, the RTA delta f with τ_R ∝ E^γ (upstream branch `newRTA`), the hadron-list selector (`particle_list`, PDG2021+) and a decayer that goes through every channel of the table, on top of upstream `XSCAPE` `d242555` |
 | `hadronic_afterburner_toolkit_code` | `github.com/IFUSP-Heavy-Ions/hadronic_afterburner_toolkit` (`QGP-USP`) | `d00b6c9` | boost-invariant dN/dy, on top of upstream `2326ba2` |
 | `3dMCGlauber_code` | `github.com/mluzum/3dMCGlauber` | `1d9856c` | (optional backend) |
 | `ipglasma_code` | `github.com/chunshen1987/ipglasma` | `bf92fe1` | (optional backend) |
@@ -226,6 +226,39 @@ design point), or a design column `deltaf_newRTA_gamma` for a γ that varies wit
 the design point (model name `RTA`; combine with others as
 `--deltaf-models PTB,RTA`; `--deltaf-models none` gives the single flat
 particlization).
+
+### Hadron list and resonance decays
+
+`iss_dict['particle_list']` picks the hadron list iSS samples, decays and
+takes its hadron gas from: 0 (default) is the afterburner's (`urqmd_v3.3+`
+for UrQMD and decays only, SMASH's for SMASH); 21 is PDG2021+ (J. Salinas San
+Martín et al., arXiv:2309.01737; 494 species plus antibaryons, 761 sampled),
+for decays only or SMASH. With SMASH the job folder links the same list in
+SMASH's format (`codes/smash_code/PDG2021Plus/`, with radiative decays, as in
+the iSS table) and SMASH runs with `-p/-d`. That costs the same per cascade
+event as SMASH's own list (zr96 dp0583 event 30, both lists side by side:
+0.63 vs 0.62 s per event) plus ~35 s more set-up in each run's first event.
+UrQMD's species are fixed, so the
+master refuses 21 with UrQMD. The image build fetches the list at a pinned
+commit and checks it (GPL-3, never committed): `get_code_packages.sh` for
+SMASH's files, `iSS_code/utilities/get_PDG2021Plus.sh` for iSS's three tables.
+The hydro EoS should be made from the same list: EoS 9 and 91 are not, so a
+tabulated EoS (24) built from PDG2021+ is the consistent choice once one
+exists (with SMASH the master keeps 24 instead of forcing 91). In PDG2021+ the
+π0, η and Σ0 decay inside iSS (π0 → γγ), which leaves the species rows of the
+standard output as they are.
+
+iSS's decayer (decays only) honours the table's branching ratios. A channel
+closed at the daughters' pole masses is reached through the Breit-Wigner tails
+of its broad daughters, each kept above the mass at which its own channels
+all stay open, and one that cannot be reached that way gives its share to the
+others; four- and five-body channels are uniform in phase space. **Until iSS
+pin `67f4a4f` a mother that drew a four-body channel, or one the UrQMD table
+marks as closed (negative daughter count), vanished.** On the one-cell test
+surface that removed 2.1 % of the final π±, 1.3 % of the K, 1.1 % of the
+protons and 0.75 % of the Λ, so every decays-only result before that pin
+(zr96/ge76 campaigns 1 and 2) carries this deficit, and yields are not
+comparable across the change without correcting for it.
 
 ## 5. What comes out, and how it is merged
 

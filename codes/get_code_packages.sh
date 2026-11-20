@@ -104,11 +104,14 @@ clone_repo_at_commit \
 # The pin adds the RTA delta f with tau_R ~ E^gamma of upstream's branch newRTA
 # (never merged there): iss_dict['bulk_deltaf_kind'] = 31 with
 # iss_dict['deltaf_newRTA_gamma'], its coefficient tables inside the repository,
-# and accepts MUSIC's EOS_to_use 24.
+# and accepts MUSIC's EOS_to_use 24.  It selects the hadron list with
+# iss_dict['particle_list'] (21: PDG2021+), and its decayer goes through every
+# channel of the table (before 67f4a4f mothers that drew a four-body channel,
+# or one marked closed, vanished: ~2% of the final pions).
 clone_repo_at_commit \
   https://github.com/IFUSP-Heavy-Ions/iSS.git \
   iSS_code \
-  24ae5806e71ef553b108cbe5b40344cee7460254 \
+  0926acbb74bceb9cf07bb4ba4894d600489b29ba \
   QGP-USP
 if ! grep -q "deltaf_model_" iSS_code/src/FSSW.cpp; then
   echo "ERROR: iSS_code does not carry the PTB delta f" >&2
@@ -119,6 +122,12 @@ if ! grep -q "deltaf_newRTA_gamma_" iSS_code/src/FSSW.cpp \
   echo "ERROR: iSS_code does not carry the RTA delta f (kind 31) and its tables" >&2
   exit 1
 fi
+if ! grep -q "perform_n_body_decay" iSS_code/src/particle_decay.cpp; then
+  echo "ERROR: iSS_code does not carry the decayer that honours every channel" >&2
+  exit 1
+fi
+# PDG2021+ tables for iss_dict['particle_list'] = 21 (fetched, GPL-3)
+bash iSS_code/utilities/get_PDG2021Plus.sh iSS_code/iSS_tables
 
 # download photonEmission wrapper
 clone_repo_at_commit \
@@ -146,6 +155,22 @@ clone_repo_at_tag \
   https://github.com/smash-transport/smash.git \
   smash_code \
   SMASH-3.2.2
+
+# PDG2021+ hadron list in SMASH's format (iss_dict['particle_list'] = 21):
+# SMASH 3.2.2 reads it with -p/-d unchanged.  The decay file is the one with
+# radiative decays, the same channels as the list iSS samples and decays with
+# (iSS_code/utilities/get_PDG2021Plus.sh).  GPL-3, fetched at a pinned commit
+# of github.com/jordissm/PDG2021Plus (arXiv:2309.01737) and checked.
+PDG2021PLUS_COMMIT=002232d34bd3e15df037a2c63d6a6d8d051f5220
+mkdir -p smash_code/PDG2021Plus
+for pair in \
+    "PDG2021Plus-1.0_particles.txt fb973ace2193647c2bd8aaa0b324392ef74b99875910333b2fc270cf35d28980" \
+    "PDG2021Plus-1.0_intermediate_decaymodes.txt a91bf7bbbd060dfc23d5cff9915edcfa0e8cbf119cdb650636b8a865d9961bc2"; do
+  read -r name sum <<< "${pair}"
+  curl -fsSL --retry 3 -o "smash_code/PDG2021Plus/${name}" \
+    "https://raw.githubusercontent.com/jordissm/PDG2021Plus/${PDG2021PLUS_COMMIT}/hadron-lists/PDG2021Plus/for_SMASH/${name}"
+  echo "${sum}  smash_code/PDG2021Plus/${name}" | sha256sum -c --quiet -
+done
 
 # download and build Pythia8 (required to compile SMASH)
 #
