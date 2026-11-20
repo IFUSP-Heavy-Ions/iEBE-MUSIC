@@ -368,6 +368,12 @@ defaults — prefer those over guessing flags.
   from other hadron lists, so particlization with PDG2021+ is slightly inconsistent until a
   tabulated EoS (24) built from PDG2021+ is used. With SMASH the master now keeps
   `EOS_to_use 24` instead of forcing 91.
+- **`MUSIChydro`'s md5 changes with every framework commit, even at the same MUSIC pin.**
+  `get_code_packages.sh` deletes each component's `.git`, and MUSIC's CMake stamps
+  `git log -1` into the binary (`GIT_COMMIT_HASH`), so it finds the framework repository and
+  stamps the framework's HEAD. Images 8a7294f and 5a970cd (same MUSIC d1323e8) differ in
+  exactly that 40-character string and the 20-byte build ID; hydro output is bit-identical.
+  Compare MUSIC binaries with those two ranges masked, or compare outputs, not md5s.
 - **Test framework changes in the image before building one.** `scripts/rerun_events_local.py`
   re-runs any campaign event in the job folder it originally ran in (same seeds); `--bind`
   mounts a modified file (driver, generate_jobs, master, a patched iSS.e) over the image's,
