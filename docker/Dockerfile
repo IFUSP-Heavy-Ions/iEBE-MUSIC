@@ -149,13 +149,17 @@ ENV HOME /opt/
 #              UrQMD seed patch, SMASH run fixes)
 #   8a7294f = "Tabulated EoS, toolkit tables off by default, one SMASH run per particlization"
 #             (MUSIC d1323e8 and iSS 24ae580; EOS_to_use 9 results unchanged)
+#   5a970cd = "PDG2021+ hadron list and the fixed iSS decayer"
+#             (iSS 0926acb; decays-only yields change: the old decayer dropped
+#              mothers of four-body and closed channels, ~2% of the pions;
+#              UrQMD and SMASH runs do not use that decayer)
 RUN cd ${HOME} && \
     mkdir iEBE-MUSIC && cd iEBE-MUSIC && \
     git init -q . && \
     git remote add origin https://github.com/IFUSP-Heavy-Ions/iEBE-MUSIC.git && \
-    git fetch -q --depth=1 origin 8a7294f267e77e8a07d99ca33171ca3ef2a42f75 && \
+    git fetch -q --depth=1 origin 5a970cd67c0343dffd6c3d191b7129ccc7209b20 && \
     git checkout -q FETCH_HEAD && \
-    test "$(git rev-parse HEAD)" = "8a7294f267e77e8a07d99ca33171ca3ef2a42f75" && \
+    test "$(git rev-parse HEAD)" = "5a970cd67c0343dffd6c3d191b7129ccc7209b20" && \
     cd codes && \
     bash get_code_packages.sh && \
     ./compile_code_packages.sh && \
