@@ -64,9 +64,9 @@ RUN cd ${HOME} \
 && mkdir iEBE-MUSIC && cd iEBE-MUSIC \
 && git init -q . \
 && git remote add origin https://github.com/IFUSP-Heavy-Ions/iEBE-MUSIC.git \
-&& git fetch -q --depth=1 origin 241af6c52e433c3236c9083c2b2a091d619a88c3 \
+&& git fetch -q --depth=1 origin d0ee2ad756ba2b8499d03502be3bed73675a021f \
 && git checkout -q FETCH_HEAD \
-&& test "$(git rev-parse HEAD)" = "241af6c52e433c3236c9083c2b2a091d619a88c3" \
+&& test "$(git rev-parse HEAD)" = "d0ee2ad756ba2b8499d03502be3bed73675a021f" \
 && cd codes \
 && bash ./get_code_packages.sh \
 && ./compile_code_packages.sh \

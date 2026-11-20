@@ -144,13 +144,16 @@ ENV HOME /opt/
 #              results are bit-identical to the pins before)
 #   241af6c = "Pin iSS with the RTA delta f (tau_R ~ E^gamma) and wire gamma into the chain"
 #             (bulk_deltaf_kind 31; the other delta f models are unchanged)
+#   d0ee2ad = "Write the standard per-event output; make UrQMD and SMASH runs correct"
+#             (qn_<id>.h5 next to the toolkit tables, which stay bit-identical;
+#              UrQMD seed patch, SMASH run fixes)
 RUN cd ${HOME} && \
     mkdir iEBE-MUSIC && cd iEBE-MUSIC && \
     git init -q . && \
     git remote add origin https://github.com/IFUSP-Heavy-Ions/iEBE-MUSIC.git && \
-    git fetch -q --depth=1 origin 241af6c52e433c3236c9083c2b2a091d619a88c3 && \
+    git fetch -q --depth=1 origin d0ee2ad756ba2b8499d03502be3bed73675a021f && \
     git checkout -q FETCH_HEAD && \
-    test "$(git rev-parse HEAD)" = "241af6c52e433c3236c9083c2b2a091d619a88c3" && \
+    test "$(git rev-parse HEAD)" = "d0ee2ad756ba2b8499d03502be3bed73675a021f" && \
     cd codes && \
     bash get_code_packages.sh && \
     ./compile_code_packages.sh && \
