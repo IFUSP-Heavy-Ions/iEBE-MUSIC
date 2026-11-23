@@ -87,12 +87,14 @@ clone_repo_at_commit \
 # XSCAPE branch split off before they were merged and ignored the flag), with
 # the bulk inverse Reynolds number of the regulator as |Pi|/(e + P) (upstream
 # chun_dev b2c918a).  Flag 0 (default) is bit-identical to cfcc264.
-# The pin adds the tabulated EoS of luizafperin/MUSIC (EOS_to_use 24, tables
-# outside the chain: control_dict['EOS_gp_dir'], see docs/chain.md).
+# The pin adds the tabulated EoS of luizafperin/MUSIC (EOS_to_use 24), read
+# from an explicit file (EOS_table_file: the table codes/eos_builder makes for
+# each run) or from Luiza's EOS-gp/ layout (control_dict['EOS_gp_dir']); see
+# docs/chain.md.
 clone_repo_at_commit \
   https://github.com/IFUSP-Heavy-Ions/MUSIC.git \
   MUSIC_code \
-  d1323e844e0bdd0cdf77505e4bf2acdae9bd382d \
+  bce37cfaa8b01565e13b7af195af039b9d3ddb6c \
   QGP-USP
 
 # download iSS particle sampler

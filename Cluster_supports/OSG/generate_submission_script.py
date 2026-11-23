@@ -35,8 +35,8 @@ def detect_eos_gp_table(param_file):
     except Exception:
         return None
     music = {k: str(v) for k, v in dict(ns.get("music_dict", {})).items()}
-    if int(float(music.get("EOS_to_use", 9))) != 24:
-        return None
+    if int(float(music.get("EOS_to_use", 9))) != 24 or ns.get("eos_dict"):
+        return None  # an eos_dict builds its own table
     root = find_repo_root()
     sys.path.insert(0, root)
     import generate_jobs  # for its table lookup only
@@ -44,6 +44,34 @@ def detect_eos_gp_table(param_file):
         music, dict(ns.get("control_dict", {})).get("EOS_gp_dir"),
         path.join(root, "codes"))
     return table
+
+
+def detect_eos_files(param_file):
+    """Files a job needs for its equation of state: the EOS_to_use 24 table
+    of the EOS-gp layout, or, for an eos_dict (codes/eos_builder), its frozen
+    c_s^2 model (or c_s^2 table) and any table prebuilt next to the parameter
+    file (eos_for_run.py prebuild).  On the worker they are found in the job
+    folder."""
+    import glob
+    import runpy
+    files = []
+    table = detect_eos_gp_table(param_file)
+    if table:
+        files.append(table)
+    try:
+        ns = runpy.run_path(param_file)
+    except Exception:
+        return files
+    eos = dict(ns.get("eos_dict") or {})
+    if eos:
+        sys.path.insert(0, path.join(find_repo_root(), "codes", "eos_builder"))
+        import eos_for_run
+        param_dir = path.dirname(path.abspath(param_file))
+        for key in ("cs2_model", "cs2_table"):
+            if key in eos:
+                files.append(eos_for_run.locate(eos[key], param_dir))
+        files += sorted(glob.glob(path.join(param_dir, "eos_table_*.dat")))
+    return files
 
 
 def detect_afterburner(param_file):
@@ -227,9 +255,7 @@ Requirements = TARGET.HasSingularity && StringListIMember("stash", HasFileTransf
 """.format(jobName, singularity_image_url))
 
     input_files = [para_dict_['param_file']]
-    eos_table = detect_eos_gp_table(para_dict_['param_file'])
-    if eos_table:
-        input_files.append(eos_table)
+    input_files += detect_eos_files(para_dict_['param_file'])
     if para_dict_['bayesFlag']:
         input_files.append(para_dict_['bayes_file'])
     if seed_file:
@@ -627,9 +653,7 @@ Requirements = TARGET.HasSingularity && StringListIMember("stash", HasFileTransf
 """.format(jobName, imagePathHeader + para_dict_["singularity_image_path"]))
 
     input_files = [para_dict_['param_file']]
-    eos_table = detect_eos_gp_table(para_dict_['param_file'])
-    if eos_table:
-        input_files.append(eos_table)
+    input_files += detect_eos_files(para_dict_['param_file'])
     if para_dict_['bayesFlag']:
         input_files.append(para_dict_['bayes_file'])
     if seed_file:

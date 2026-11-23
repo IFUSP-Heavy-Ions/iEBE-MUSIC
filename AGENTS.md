@@ -219,12 +219,24 @@ defaults — prefer those over guessing flags.
   whose y→η Jacobian gives a ~25 % mid-rapidity dip and a window-dependent "yield". Use
   identified particles in rapidity for the yield. The `_vndata_diff_y_-0.5_0.5` filename
   suffix is hardcoded and stale — the table is filled over `rap_min..rap_max`.
-- **Tabulated EoS (MUSIC `EOS_to_use 24`) needs MUSIC, iSS and the table.** MUSIC pin `d1323e8`
+- **Tabulated EoS (MUSIC `EOS_to_use 24`) needs MUSIC, iSS and the table.** MUSIC pin `d1323e8` (or later)
   reads it (port of luizafperin/MUSIC); iSS before `24ae580` exits on an EoS number it does not
   know, which left events without particles that the driver then recorded as fine. The driver now
   calls an event whose particle list holds no event `particlization_failed`. Tables never go into
   the chain: `control_dict['EOS_gp_dir']`, and the job ships the one table it needs (20 MB). See
-  "Equation of state from a table" in `docs/chain.md`.
+  "Equation of state" in `docs/chain.md`.
+- **Prefer `eos_dict` to the EOS-gp tables, and never anchor an EoS anywhere but `T_freeze`.**
+  Luiza's tables count the photon as a hadron and drop the antibaryons, so at T_sw = 136 MeV
+  their P is 42 % and e 19 % above iSS's gas for the same list: iSS reads T = 139.3 MeV off the
+  freeze-out e and the particles carry 5.6 % less entropy than the fluid (fewer, hotter
+  particles: protons up, pions down, which is what the first EoS-24 test showed). An
+  `eos_dict` run builds its table from c_s^2 above `T_freeze` and the hadron gas of the very list
+  iSS samples (`codes/eos_builder`, matches iSS's `HRGEOS_PST-*.dat` to 3e-5), reading
+  `T_freeze` and the list from the master's output, so they cannot drift apart. In the MUSIC
+  folder the table is `eos_table.txt`, not `.dat`: `run_hydro.sh` runs `rm -fr *.dat` there
+  before every event (a `.dat` link was silently deleted and MUSIC found no table). The
+  iSS lists' charm/bottom columns are unreliable (omega has bottom = 3 in the UrQMD and s95p
+  lists), so heavy flavour is read from the PDG code.
 - **The toolkit tables are off by default** (`control_dict['toolkit_tables']`); the output is
   `qn_<id>.h5`. A regression against an earlier campaign's `spvn_results_<id>.h5` needs
   `toolkit_tables = True`.
@@ -365,8 +377,8 @@ defaults — prefer those over guessing flags.
   analytic feed-down of every species of both lists, and exact E, p, Q, B, S conservation.
 - **`iss_dict['particle_list'] = 21` (PDG2021+) needs a matching EoS.** The list is fetched at
   build time (GPL-3; never commit `pdg-PDG2021Plus.dat` or the SMASH files). EoS 9/91 come
-  from other hadron lists, so particlization with PDG2021+ is slightly inconsistent until a
-  tabulated EoS (24) built from PDG2021+ is used. With SMASH the master now keeps
+  from other hadron lists, so particlization with PDG2021+ is slightly inconsistent unless the
+  EoS is built from PDG2021+ (an `eos_dict` run with `particle_list = 21` does that). With SMASH the master now keeps
   `EOS_to_use 24` instead of forcing 91.
 - **`MUSIChydro`'s md5 changes with every framework commit, even at the same MUSIC pin.**
   `get_code_packages.sh` deletes each component's `.git`, and MUSIC's CMake stamps

@@ -156,11 +156,13 @@ def main():
                     line = "executable = " + exec_path
                 elif line.startswith("transfer_input_files ="):
                     # a tabulated EoS (MUSIC EOS_to_use 24) travels with the
-                    # job; ship each table once, next to the dictionaries
+                    # job, and so do an eos_dict's frozen c_s^2 model and
+                    # prebuilt table; ship each file once, next to the
+                    # dictionaries (their names are content hashes)
                     eos_tables = [
                         x.strip() for x in line.split("=", 1)[1].split(",")
                         if os.path.basename(x.strip()).startswith("eos_")
-                        and x.strip().endswith(".dat")]
+                        and x.strip().endswith((".dat", ".json"))]
                     line = ("transfer_input_files = %s/dicts/%s" %
                             (args.aphome, os.path.basename(dict_src)))
                     for table in eos_tables:

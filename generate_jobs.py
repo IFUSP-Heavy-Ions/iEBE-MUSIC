@@ -1138,7 +1138,16 @@ def generate_event_folders(initial_condition_database, initial_condition_type,
     subprocess.call(f"ln -s {targetFile} {desLoc}", shell=True)
     music_input = read_music_input(
         path.join(param_folder, 'MUSIC/music_input_mode_2'))
-    if int(float(music_input.get("EOS_to_use", 9))) == 24:
+    if music_input.get("EOS_table_file"):
+        # EoS table built for this run (eos_dict): next to the music input
+        subprocess.call("ln -s {} {}".format(
+            path.join(code_path, 'MUSIC_code/EOS'),
+            path.join(event_folder, "MUSIC/EOS")), shell=True)
+        os.symlink(
+            path.abspath(path.join(param_folder, 'MUSIC',
+                                   music_input["EOS_table_file"])),
+            path.join(event_folder, 'MUSIC', music_input["EOS_table_file"]))
+    elif int(float(music_input.get("EOS_to_use", 9))) == 24:
         # tabulated EoS: the one table this run reads, from outside the chain
         table, rel = find_eos_gp_table(
             music_input, para_dict.control_dict.get('EOS_gp_dir'), code_path)
@@ -1667,6 +1676,15 @@ def main():
             + "-path {} -par {} -seed {};)".format(
                 working_folder_name, path.abspath(args.par_dict), seed),
             shell=True)
+
+    if getattr(parameter_dict, 'eos_dict', None):
+        # the run's EoS table, from its c_s^2, T_freeze and hadron list
+        sys.path.insert(0, path.join(code_package_path, "codes",
+                                     "eos_builder"))
+        import eos_for_run
+        eos_for_run.table_for_run(
+            parameter_dict.eos_dict, path.abspath(args.par_dict),
+            path.join(working_folder_name, "model_parameters"), code_path)
 
     if (initial_condition_type not in ("IPGlasma", "IPGlasma+KoMPoST")
             or initial_condition_database != "self"):

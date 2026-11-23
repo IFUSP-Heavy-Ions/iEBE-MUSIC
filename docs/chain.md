@@ -52,7 +52,7 @@ Three layers, all immutable by construction:
 |---|---|---|---|
 | `isobar_sampler_code` | `github.com/mluzum/Isobar-Sampler` (`QGP-USP`) | `b5eab93` | deterministic seeds, faster sampler, fluctuating deformation, many events per call, on top of `Public_Release` `bc586de` |
 | `trento_code` | `github.com/IFUSP-Heavy-Ions/trento` (`QGP-USP`) | `54aa461` | nucleon-configuration interface, event-id mode, on top of Duke-QCD `10960b2` |
-| `MUSIC_code` | `github.com/IFUSP-Heavy-Ions/MUSIC` (`QGP-USP`) | `d1323e8` | resummed transport coefficients (`FlagResumTransportCoeff`, off by default) and the tabulated EoS 24 of luizafperin/MUSIC, on top of upstream `XSCAPE` `cfcc264` |
+| `MUSIC_code` | `github.com/IFUSP-Heavy-Ions/MUSIC` (`QGP-USP`) | `bce37cf` | resummed transport coefficients (`FlagResumTransportCoeff`, off by default) and the tabulated EoS 24 of luizafperin/MUSIC (read from `EOS_table_file` or the EOS-gp layout), on top of upstream `XSCAPE` `cfcc264` |
 | `iSS_code` | `github.com/IFUSP-Heavy-Ions/iSS` (`QGP-USP`) | `0926acb` | PTB delta f, the RTA delta f with τ_R ∝ E^γ (upstream branch `newRTA`), the hadron-list selector (`particle_list`, PDG2021+) and a decayer that goes through every channel of the table, on top of upstream `XSCAPE` `d242555` |
 | `hadronic_afterburner_toolkit_code` | `github.com/IFUSP-Heavy-Ions/hadronic_afterburner_toolkit` (`QGP-USP`) | `d00b6c9` | boost-invariant dN/dy, on top of upstream `2326ba2` |
 | `3dMCGlauber_code` | `github.com/mluzum/3dMCGlauber` | `1d9856c` | (optional backend) |
@@ -176,25 +176,101 @@ user dictionary is merged into it by `dict.update()`. Two consequences:
 - if the chain needs a new knob, add it to the master *and* to `MakeDictionaries.py`,
   then to the generated input files.
 
-### Equation of state from a table (MUSIC `EOS_to_use 24`)
+### Equation of state (MUSIC `EOS_to_use 24`)
 
-MUSIC can read one table of a Gaussian-process EoS ensemble at mu_B = 0 (from
-Luiza Perin's MUSIC fork; tables in `github.com/luizafperin/MUSIC-EOS-data`,
-never in the chain). In `music_dict`: `EOS_to_use = 24` and `EOS_gp_l`,
-`EOS_gp_sigma`, `T_sw` [MeV], `EOS_gp_type` (hrg, pwr, w), `EOS_gp_sample`
-(s0, s1, ...), `gp_type` (constrained, unconstrained, training),
-`EOS_gp_mean` (unconstrained only), with MUSIC's defaults 400, 15, 150, hrg,
-s0, constrained, 0_3. In `control_dict`: `EOS_gp_dir`, the folder that holds
-`EOS-gp/` as MUSIC's `EOS/download_EOS-gp.sh` lays it out. `generate_jobs.py`
-links the one table an event needs into its `MUSIC/EOS/EOS-gp/`; the OSG
-generator and `stage_campaign.py` ship that table (~20 MB) with every job,
-and on the worker it is found in the job folder. `MakeDictionaries.py` takes
-the same names as optional design columns (and `--eos-gp-dir`). iSS has to
-accept the number too (iSS pin `24ae580`). Keep `T_freeze` below `T_sw`
-(generate_jobs.py warns): above it the freeze-out falls in the part of the
-table that is not the hadron gas iSS samples. A run with a table takes about
-40 % longer than with `EOS_to_use 9` (each lookup searches a 175,000-row
-non-uniform table).
+MUSIC reads a tabulated EoS at mu_B = 0 (`EOS_to_use 24`, from Luiza Perin's
+MUSIC fork). There are two ways to give it one.
+
+**Built for each run from a speed of sound (`eos_dict`, `codes/eos_builder/`).**
+The chain does not fix a prior: a run (a design point) supplies c_s^2(T) above
+the switching temperature, and the chain makes the table. Its three inputs
+each come from one place:
+
+| input | from |
+|---|---|
+| c_s^2(T) above T_sw | `eos_dict`: a frozen model (`eos_models.py`) and the design point's coordinates, or a (T, c_s^2) file |
+| T_sw | `music_dict['T_freeze']`: hydro switches to particles there, so it is always the anchor (`use_eps_for_freeze_out` must be 0) |
+| hadron gas below T_sw | the list iSS samples in this run (`particle_list`, afterburner), every light-flavour species at its pole mass, antibaryons added, no photon: the same gas as iSS's `HRGEOS_PST-*.dat` (checked: 3e-5 for all four lists), so iSS (`regulateEOS`) finds T_sw again from the freeze-out e |
+
+Above T_sw: s = s_HRG(T_sw) exp(∫ dT/(T c_s^2)), P = P_HRG(T_sw) + ∫ s dT,
+e = Ts - P (`build_eos_table.py`). e, P and s are continuous at T_sw; c_s^2
+may jump. A table has ~7,000 rows (0.4 % steps in e; first row e = 0) and takes
+~4 s to build (PDG2021+: ~8 s). T_sw and the list are read from the files the
+parameter master wrote, never from a second copy.
+
+*The prior is the campaign's.* A model spec (JSON) chooses it; the one model
+implemented is `gp_logit_cs2`, a Gaussian process for ln(1/c_s^2 - 1) (as in
+`github.com/luizafperin/generate_gpEOS`) in its Karhunen-Loeve form, so a
+design point is a few coordinates z_k ~ N(0, 1):
+
+```json
+{"model": "gp_logit_cs2", "T_grid_GeV": [0.12, 0.9, 0.001],
+ "mean": {"file": "cs2_mean.dat"},
+ "kernel": {"type": "squared_exponential", "length_GeV": 0.1, "sigma_phi": 0.19},
+ "n_modes": 4}
+```
+
+`mean` may also be `{"constant": 0.3}`; `n_modes` may be `"all"` (the full
+GP, then use a coarser grid); `"coordinates": "seed"` replaces the columns by
+one integer column `eos_seed` (z drawn from it: prior draws, not an emulator
+design). The grid must start at or below every T_sw of the campaign: the same
+z then means the same c_s^2(T) at every T_sw. generate_gpEOS's (l, sigma) is
+`length_GeV = l/1000`, `sigma_phi = 0.05 sqrt(sigma)`. Another prior is
+another model in `eos_models.py`, or a (T, c_s^2) file per design point
+(`eos_dict = {'cs2_table': ...}`).
+
+*In a campaign.* `MakeDictionaries.py --eos-model spec.json` freezes the model
+once into `<output>/eos_model_<sha256 prefix>.json` (grid, mean, basis: the
+numbers every design point is evaluated with) and gives each point
+
+```python
+eos_dict = {'cs2_model': '.../eos_model_bb467922f137.json',
+            'cs2_model_sha256': 'bb46...',
+            'coordinates': {'eos_z1': 1.5, 'eos_z2': -1.0, ...}}
+```
+
+plus `EOS_to_use = 24`. The model's columns (`eos_z1`..`eos_zK`) must be in
+the design. An optional `particle_list` column (0, 21 or PDG2021Plus) sets
+`iss_dict['particle_list']`, and the EoS follows it.
+
+*Where the table is built.* `generate_jobs.py` builds it into
+`model_parameters/MUSIC/eos_table.txt` (not `.dat`: `run_hydro.sh` deletes
+`MUSIC/*.dat`) and links it into every event. A table is named by the sha256 of
+its inputs (`eos_table_<16 hex>.dat`; format version, T_sw, the list's
+sha256, the c_s^2 source); one of that name next to the parameter file or in
+the job folder, with the same inputs in its header, is used as it is. For a
+campaign, prebuild the tables inside the image, so that every worker reads the
+same bytes (a build on a worker may differ in the last bits between CPUs,
+as libm and numpy pick CPU-specific code paths):
+
+```bash
+docker run --rm --user $(id -u):$(id -g) -v $PWD:$PWD -w $PWD \
+    --entrypoint python3 iebe-music:slim-<pin> \
+    /opt/iEBE-MUSIC/codes/eos_builder/eos_for_run.py prebuild \
+    DesignPoint*/parameter_dictionary_design_point_*.py --codes /opt/iEBE-MUSIC/codes
+```
+
+The OSG generator ships the frozen model and any prebuilt table with each
+job, and `stage_campaign.py` keeps one copy of each (content-named) file.
+MUSIC is given the file with `EOS_table_file` (MUSIC pin with that option).
+
+**From Luiza Perin's EOS-gp tables.** In `music_dict`: `EOS_to_use = 24`
+and `EOS_gp_l`, `EOS_gp_sigma`, `T_sw` [MeV], `EOS_gp_type` (hrg, pwr, w),
+`EOS_gp_sample` (s0, s1, ...), `gp_type` (constrained, unconstrained,
+training), `EOS_gp_mean` (unconstrained only), with MUSIC's defaults 400, 15,
+150, hrg, s0, constrained, 0_3. In `control_dict`: `EOS_gp_dir`, the folder
+that holds `EOS-gp/` as MUSIC's `EOS/download_EOS-gp.sh` lays it out
+(tables in `github.com/luizafperin/MUSIC-EOS-data`, never in the chain).
+`generate_jobs.py` links the one table an event needs into its
+`MUSIC/EOS/EOS-gp/`; the OSG generator and `stage_campaign.py` ship that
+table (~20 MB) with every job. `MakeDictionaries.py` takes the same names as
+optional design columns (and `--eos-gp-dir`). Use these only to reproduce
+runs made with them: their hadron gas is not iSS's (it counts the photon and
+leaves out the antibaryons: at T_sw = 136 MeV P is 42 % and e 19 % above
+iSS's gas for the same list, so iSS finds T = 139.3 MeV and the particles
+carry 5.6 % less entropy than the fluid), the files named `l400` were drawn
+with a 10 MeV correlation length, and a run takes ~40 % longer than with
+`EOS_to_use 9` (175,000-row tables).
 
 ### Viscous corrections at particlization (delta f)
 

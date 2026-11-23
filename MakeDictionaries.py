@@ -61,6 +61,21 @@ the design point to EOS_to_use 24.  The tables themselves stay outside the
 chain: --eos-gp-dir sets control_dict['EOS_gp_dir'], the folder that holds
 EOS-gp/.
 
+Equation of state built per design point (--eos-model, codes/eos_builder):
+MUSIC reads a table made for each run from a speed of sound c_s^2(T) above
+the switching temperature (always T_freeze) and, below it, the hadron gas of
+the list iSS samples.  --eos-model takes a model spec (or an already frozen
+model, see codes/eos_builder/eos_models.py); the model is frozen once into
+<output dir>/eos_model_<sha256 prefix>.json and every design point gets
+eos_dict = {'cs2_model': that file, 'cs2_model_sha256': ..., 'coordinates':
+{its design columns}}.  The model names its design columns (e.g. eos_z1 ...
+eos_zK, or eos_seed); they must all be present.  The table itself is built
+when the job is generated (generate_jobs.py), or beforehand with
+codes/eos_builder/eos_for_run.py prebuild, which the submit files then ship.
+    particle_list      optional; iSS's hadron list: 0 (the afterburner's
+                       list) or 21 (PDG2021+); sets iss_dict['particle_list'],
+                       so the EoS's hadron gas follows it
+
 Viscous corrections at particlization (--deltaf-models): every hydro surface
 is particlized once per model, with the same seeds, into the group
 deltaf_<name> of the event file.  Without the option (and without a
@@ -398,6 +413,14 @@ def parse_args() -> argparse.Namespace:
         "with: Grad22, CE, PTB, RTA (gamma from the design column "
         "deltaf_newRTA_gamma), RTA<nnn> (gamma = nnn/100), or 'none'. "
         "Default: the template's list, or RTA if the design has the column.",
+    )
+    parser.add_argument(
+        "--eos-model",
+        type=Path,
+        default=None,
+        help="Speed-of-sound model of the per-design-point EoS (a spec or a "
+        "frozen model, codes/eos_builder/eos_models.py); its design columns "
+        "become each point's eos_dict['coordinates'].",
     )
     parser.add_argument(
         "--eos-gp-dir",
@@ -833,6 +856,11 @@ def write_design_point_file(output_dir: Path, index_one_based: int,
         value = config[name]
         lines.append(f"{name} = {python_literal(value)}")
         lines.append("")
+    if config.get("eos_dict"):
+        lines.append("# equation of state built for this run "
+                     "(codes/eos_builder/eos_for_run.py)")
+        lines.append(f"eos_dict = {python_literal(config['eos_dict'])}")
+        lines.append("")
 
     output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     output_path.chmod(0o755)
@@ -934,6 +962,68 @@ def set_eos_gp(config: dict, row: dict[str, str],
             music[key] = value
 
 
+PARTICLE_LISTS = {"0": 0, "21": 21, "pdg2021plus": 21}
+
+
+def set_particle_list(config: dict, row: dict[str, str]) -> None:
+    """iSS's hadron list from the optional design column particle_list."""
+    value = str(row.get("particle_list", "")).strip()
+    if not value:
+        return
+    key = value.lower()
+    if key.replace(".", "", 1).isdigit():
+        key = str(int(float(key)))
+    if key not in PARTICLE_LISTS:
+        raise ValueError(f"particle_list = {value!r}: 0, 21 or PDG2021Plus")
+    config["iss_dict"]["particle_list"] = PARTICLE_LISTS[key]
+
+
+def freeze_eos_model(model_path: Path, output_dir: Path):
+    """The frozen speed-of-sound model in output_dir under its content name:
+    (path, sha256, frozen model)."""
+    import hashlib
+    import json
+    import shutil
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent/"codes"
+                           /"eos_builder"))
+    import eos_models
+    data = json.loads(model_path.read_text())
+    output_dir.mkdir(parents=True, exist_ok=True)
+    if "basis" in data:  # already frozen: copy it as it is
+        digest = hashlib.sha256(model_path.read_bytes()).hexdigest()
+        target = output_dir/f"eos_model_{digest[:12]}.json"
+        if not target.exists():
+            shutil.copyfile(model_path, target)
+        return target, digest, data
+    frozen = eos_models.freeze(data, str(model_path.resolve().parent))
+    staging = output_dir/"eos_model.tmp.json"
+    digest = eos_models.save_frozen(frozen, str(staging))
+    target = output_dir/f"eos_model_{digest[:12]}.json"
+    staging.replace(target)
+    return target, digest, frozen
+
+
+def set_eos_model(config: dict, row: dict[str, str], eos_model) -> None:
+    """eos_dict of one design point: the frozen model and its coordinates."""
+    if eos_model is None:
+        return
+    path, digest, frozen = eos_model
+    coords = {}
+    for col in frozen["columns"]:
+        value = str(row.get(col, "")).strip()
+        if not value:
+            raise ValueError(f"--eos-model needs the design column {col}")
+        coords[col] = (int(float(value)) if col.endswith("seed")
+                       else float(value))
+    config["music_dict"]["EOS_to_use"] = 24
+    config["eos_dict"] = {
+        "cs2_model": str(path.resolve()),
+        "cs2_model_sha256": digest,
+        "coordinates": coords,
+    }
+
+
 def main() -> None:
     args = parse_args()
     cwd = Path.cwd()
@@ -958,6 +1048,12 @@ def main() -> None:
         raise ValueError(
             f"Design-point range ends at {end_design_point}, but the design has only {len(rows)} rows."
         )
+
+    eos_model = (freeze_eos_model(args.eos_model, output_dir)
+                 if args.eos_model else None)
+    if eos_model:
+        print(f"EoS model: {eos_model[0]} (columns "
+              f"{', '.join(eos_model[2]['columns'])})")
 
     template_ns = load_template(template_path)
     base_config = {
@@ -1002,6 +1098,8 @@ def main() -> None:
         update_template_values(config, row)
         set_deltaf_models(config, row, args.deltaf_models)
         set_eos_gp(config, row, args.eos_gp_dir)
+        set_particle_list(config, row)
+        set_eos_model(config, row, eos_model)
 
         dir_name = f"DesignPoint{one_based_index}"
         point_dir = output_dir/dir_name

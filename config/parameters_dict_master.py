@@ -1127,6 +1127,21 @@ def update_parameters_dict(par_dict_path, ran_seed):
             parameters_dict.music_dict['output_vorticity'] = 1
 
     music_dict.update(parameters_dict.music_dict)
+    # An equation of state built for this run (eos_dict, see
+    # codes/eos_builder): MUSIC reads the table generate_jobs.py writes to
+    # model_parameters/MUSIC/eos_table.txt, whose hadron gas below T_freeze
+    # is the list iSS samples.  (Not *.dat: run_hydro.sh deletes MUSIC/*.dat
+    # before every event.)
+    if getattr(parameters_dict, 'eos_dict', None):
+        if int(parameters_dict.music_dict.get('EOS_to_use', 24)) != 24:
+            raise ValueError("eos_dict builds a table for EOS_to_use 24, but "
+                             "music_dict sets EOS_to_use = %s"
+                             % parameters_dict.music_dict['EOS_to_use'])
+        if int(music_dict.get('use_eps_for_freeze_out', 1)) != 0:
+            raise ValueError("eos_dict anchors the hadron gas at T_freeze: "
+                             "set music_dict['use_eps_for_freeze_out'] = 0")
+        music_dict['EOS_to_use'] = 24
+        music_dict['EOS_table_file'] = 'eos_table.txt'
     if 'compute_photon_emission' in parameters_dict.control_dict:
         if parameters_dict.control_dict['compute_photon_emission']:
             music_dict['output_evolution_data'] = 2
