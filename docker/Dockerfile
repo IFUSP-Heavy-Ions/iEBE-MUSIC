@@ -155,13 +155,15 @@ ENV HOME /opt/
 #              UrQMD and SMASH runs do not use that decayer)
 #   f5eab40 = "Build each run's EoS from its speed of sound, T_freeze and hadron list"
 #             (MUSIC bce37cf: EOS_table_file; only runs with an eos_dict change)
+#   5c19ce8 = "Pin MUSIC 26a2d40: O(1) row search for tabulated EoS"
+#             (EOS 24 hydro ~5% slower than EOS 9 instead of ~50%; output unchanged)
 RUN cd ${HOME} && \
     mkdir iEBE-MUSIC && cd iEBE-MUSIC && \
     git init -q . && \
     git remote add origin https://github.com/IFUSP-Heavy-Ions/iEBE-MUSIC.git && \
-    git fetch -q --depth=1 origin f5eab40ae515a04e71cfe6819e69a37a027ac3a1 && \
+    git fetch -q --depth=1 origin 5c19ce8d5c63d53d41551976174f32928e5b2a26 && \
     git checkout -q FETCH_HEAD && \
-    test "$(git rev-parse HEAD)" = "f5eab40ae515a04e71cfe6819e69a37a027ac3a1" && \
+    test "$(git rev-parse HEAD)" = "5c19ce8d5c63d53d41551976174f32928e5b2a26" && \
     cd codes && \
     bash get_code_packages.sh && \
     ./compile_code_packages.sh && \
