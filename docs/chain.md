@@ -52,7 +52,7 @@ Three layers, all immutable by construction:
 |---|---|---|---|
 | `isobar_sampler_code` | `github.com/mluzum/Isobar-Sampler` (`QGP-USP`) | `b5eab93` | deterministic seeds, faster sampler, fluctuating deformation, many events per call, on top of `Public_Release` `bc586de` |
 | `trento_code` | `github.com/IFUSP-Heavy-Ions/trento` (`QGP-USP`) | `54aa461` | nucleon-configuration interface, event-id mode, on top of Duke-QCD `10960b2` |
-| `MUSIC_code` | `github.com/IFUSP-Heavy-Ions/MUSIC` (`QGP-USP`) | `bce37cf` | resummed transport coefficients (`FlagResumTransportCoeff`, off by default) and the tabulated EoS 24 of luizafperin/MUSIC (read from `EOS_table_file` or the EOS-gp layout), on top of upstream `XSCAPE` `cfcc264` |
+| `MUSIC_code` | `github.com/IFUSP-Heavy-Ions/MUSIC` (`QGP-USP`) | `26a2d40` | resummed transport coefficients (`FlagResumTransportCoeff`, off by default) and the tabulated EoS 24 of luizafperin/MUSIC (read from `EOS_table_file` or the EOS-gp layout), on top of upstream `XSCAPE` `cfcc264` |
 | `iSS_code` | `github.com/IFUSP-Heavy-Ions/iSS` (`QGP-USP`) | `0926acb` | PTB delta f, the RTA delta f with τ_R ∝ E^γ (upstream branch `newRTA`), the hadron-list selector (`particle_list`, PDG2021+) and a decayer that goes through every channel of the table, on top of upstream `XSCAPE` `d242555` |
 | `hadronic_afterburner_toolkit_code` | `github.com/IFUSP-Heavy-Ions/hadronic_afterburner_toolkit` (`QGP-USP`) | `d00b6c9` | boost-invariant dN/dy, on top of upstream `2326ba2` |
 | `3dMCGlauber_code` | `github.com/mluzum/3dMCGlauber` | `1d9856c` | (optional backend) |
@@ -254,6 +254,13 @@ The OSG generator ships the frozen model and any prebuilt table with each
 job, and `stage_campaign.py` keeps one copy of each (content-named) file.
 MUSIC is given the file with `EOS_table_file` (MUSIC pin with that option).
 
+*Cost.* MUSIC finds a table row in O(1) (an index over the bit pattern of e)
+and takes P, dP/de and c_s^2 from one row, so hydro with a table is 5-7 %
+slower than with `EOS_to_use 9` (zr96-c2 dp583 events 101 and 140, side by
+side); before MUSIC `26a2d40` it was ~50 % (five binary searches per cell
+update), with bit-identical output. Building the table adds 3-8 s once per
+job, nothing if it was prebuilt.
+
 **From Luiza Perin's EOS-gp tables.** In `music_dict`: `EOS_to_use = 24`
 and `EOS_gp_l`, `EOS_gp_sigma`, `T_sw` [MeV], `EOS_gp_type` (hrg, pwr, w),
 `EOS_gp_sample` (s0, s1, ...), `gp_type` (constrained, unconstrained,
@@ -268,9 +275,10 @@ optional design columns (and `--eos-gp-dir`). Use these only to reproduce
 runs made with them: their hadron gas is not iSS's (it counts the photon and
 leaves out the antibaryons: at T_sw = 136 MeV P is 42 % and e 19 % above
 iSS's gas for the same list, so iSS finds T = 139.3 MeV and the particles
-carry 5.6 % less entropy than the fluid), the files named `l400` were drawn
-with a 10 MeV correlation length, and a run takes ~40 % longer than with
-`EOS_to_use 9` (175,000-row tables).
+carry 5.6 % less entropy than the fluid), and the files named `l400` were
+drawn with a 10 MeV correlation length. (Their 175,000-row tables made a run
+~40 % slower than `EOS_to_use 9` with the old reader; the O(1) search makes a
+lookup ~10x faster for them too, not yet timed in a run.)
 
 ### Viscous corrections at particlization (delta f)
 

@@ -89,12 +89,12 @@ clone_repo_at_commit \
 # chun_dev b2c918a).  Flag 0 (default) is bit-identical to cfcc264.
 # The pin adds the tabulated EoS of luizafperin/MUSIC (EOS_to_use 24), read
 # from an explicit file (EOS_table_file: the table codes/eos_builder makes for
-# each run) or from Luiza's EOS-gp/ layout (control_dict['EOS_gp_dir']); see
-# docs/chain.md.
+# each run) or from Luiza's EOS-gp/ layout (control_dict['EOS_gp_dir']), with
+# an O(1) row search (EOS 24 hydro ~5% slower than EOS 9); see docs/chain.md.
 clone_repo_at_commit \
   https://github.com/IFUSP-Heavy-Ions/MUSIC.git \
   MUSIC_code \
-  bce37cfaa8b01565e13b7af195af039b9d3ddb6c \
+  26a2d40ca37eef325139c6163fd6c678e4d88818 \
   QGP-USP
 
 # download iSS particle sampler
