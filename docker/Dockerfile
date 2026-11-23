@@ -153,13 +153,15 @@ ENV HOME /opt/
 #             (iSS 0926acb; decays-only yields change: the old decayer dropped
 #              mothers of four-body and closed channels, ~2% of the pions;
 #              UrQMD and SMASH runs do not use that decayer)
+#   f5eab40 = "Build each run's EoS from its speed of sound, T_freeze and hadron list"
+#             (MUSIC bce37cf: EOS_table_file; only runs with an eos_dict change)
 RUN cd ${HOME} && \
     mkdir iEBE-MUSIC && cd iEBE-MUSIC && \
     git init -q . && \
     git remote add origin https://github.com/IFUSP-Heavy-Ions/iEBE-MUSIC.git && \
-    git fetch -q --depth=1 origin 5a970cd67c0343dffd6c3d191b7129ccc7209b20 && \
+    git fetch -q --depth=1 origin f5eab40ae515a04e71cfe6819e69a37a027ac3a1 && \
     git checkout -q FETCH_HEAD && \
-    test "$(git rev-parse HEAD)" = "5a970cd67c0343dffd6c3d191b7129ccc7209b20" && \
+    test "$(git rev-parse HEAD)" = "f5eab40ae515a04e71cfe6819e69a37a027ac3a1" && \
     cd codes && \
     bash get_code_packages.sh && \
     ./compile_code_packages.sh && \
