@@ -1,0 +1,8 @@
+{"model": "gp_logit_cs2",
+ "T_grid_GeV": [0.130, 0.600, 0.002],
+ "mean": {"constant": 0.22},
+ "kernel": {"type": "squared_exponential", "coordinate": "lnT", "length_lnT": 0.4, "sigma_phi": 0.6},
+ "high_T": {"relax_to": 0.3333333333333333, "scale_GeV": 0.2, "top_GeV": 5.0},
+ "n_modes": 4,
+ "coordinates": "columns",
+ "column_prefix": "eos_z"}
