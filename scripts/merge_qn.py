@@ -60,6 +60,24 @@ def num(row, key, default=np.nan):
         return default
 
 
+def check_hbt_grid(h, h0, name, variants):
+    """Refuse a file whose HBT grid or HBT rapidity window differs from the
+    first file's: their sums cannot be added."""
+    keys = sorted(k for k in set(h0["grid"]) | set(h["grid"])
+                  if k.startswith("hbt_"))
+    for k in keys:
+        if (k not in h["grid"] or k not in h0["grid"]
+                or not np.array_equal(h["grid/" + k][()], h0["grid/" + k][()])):
+            raise ValueError("%s: /grid/%s differs from the first file's" %
+                             (name, k))
+    for v in variants:
+        a = h["deltaf_" + v].attrs.get("hbt_y_cut")
+        b = h0["deltaf_" + v].attrs.get("hbt_y_cut")
+        if (a is None) != (b is None) or (a is not None and a != b):
+            raise ValueError("%s: deltaf_%s hbt_y_cut %s, the first file %s" %
+                             (name, v, a, b))
+
+
 def create(group, name, shape, dtype):
     chunks = (min(BLOCK, max(shape[0], 1)),) + tuple(shape[1:])
     return group.create_dataset(name, shape=shape, dtype=dtype, chunks=chunks,
@@ -170,6 +188,7 @@ def merge(src_dir, out_path, selection=None):
                             raise ValueError("%s has variants %s, expected %s" %
                                              (files[ev], h.attrs["variants"],
                                               ",".join(variants)))
+                        check_hbt_grid(h, h0, files[ev], variants)
                         for k in buf:
                             if "events/" + k in h:
                                 buf[k][i] = h["events/" + k][0]
