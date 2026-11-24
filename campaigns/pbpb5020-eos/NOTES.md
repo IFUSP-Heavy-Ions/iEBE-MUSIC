@@ -24,7 +24,7 @@ RHIC + LHC fit). `template_pbpb5020.py` holds them.
 | b_pi | 4.65 | shear_relax_time_factor |
 | T_sw | 0.136 GeV | hadron gas anchored here (SMASH list) |
 | afterburner | SMASH | |
-| delta f | one variant, "Grad": deltaf_model 0, bulk_deltaf_kind 11 | iSS 14-moment; with SMASH it loads the smash_box coefficients |
+| delta f | one variant, "Grad": deltaf_model 0, bulk_deltaf_kind 20, RegVisYield 1 | iSS 22-moment (WSU, NEoS-BQS coefficients); the viscous yield of each species in a cell is capped at 2 N_eq, as JETSCAPE regulated |delta f| <= f_eq |
 | b_max | 14.69 fm | MakeDictionaries' formula at sigma_NN 7.0 |
 | hydro grid | +-20 fm, 0.2 fm cells, fixed | the adaptive grid was fitted for Zr with a fixed EoS |
 | HBT | on (`control_dict['hbt'] = True`) | |
@@ -56,11 +56,48 @@ jackknife data within about 1 sigma above 180 MeV, but should be checked
 against the paper. The data file `lattice_cs2_WB_blend.dat` is not in git
 (the user's data).
 
+
+## Delta f: why not iSS's 14-moment option (2026-11-24)
+
+Context: the Grad MAP's zeta/s is still about 0.125 at T_sw = 0.136 GeV
+(T_zeta 0.12, w_zeta 0.072), so the freeze-out surface carries a large bulk
+pressure. In central events Pi/(e+P) averages -0.06, from -0.17 to +0.12.
+The positive values are the cells frozen at tau_0, which carry free
+streaming's e/3 - P(e) but only 0.6% of the emission.
+
+Test: event 3729's surface (b = 0.8 fm, lattice EoS, N = 17.2) re-sampled
+with each iSS setting.
+
+| iSS setting | charged/unit y vs no delta f | <pT>_ch | p/pi+ |
+|---|---|---|---|
+| no delta f | x1.00 | 0.685 | 0.034 |
+| 14-moment, bulk_deltaf_kind 11 (OSU tables) | x138 | 0.732 | 0.058 |
+| kind 11 with RegVisYield 1 | x1.65 | 0.728 | 0.043 |
+| 22-moment, kind 20 (campaign 2's Grad22) | x1.04 | 0.636 | 0.065 |
+| kind 20 with RegVisYield 1 (this campaign) | x1.01 | 0.622 | 0.060 |
+| Chapman-Enskog, kind 21 | x1.01 | 0.623 | 0.069 |
+| PTB | x1.24 | 0.506 | 0.038 |
+
+A negative Pi should lower <pT> and raise heavy-particle fractions, at
+nearly the same yield. Kinds 20 and 21 do exactly that. Kind 11 raises
+<pT> and multiplies the yields, and without the cap the most central events
+came out 20-140 times too large. So kind 11 is wrong in this iSS (a sign,
+unit or table-convention error); no campaign has used it.
+
+## Cross section (2026-11-24)
+
+From `scripts/cross_section/xsec_point.py`, n_conf 600:
+- sigma_inel = 908.2 +- 0.7 fm^2; TRENTo brute force gives 911.6 +- 3.6.
+- 74.6% of it is below b_max = 14.69 fm. Importance sampling must use
+  coverage 0.746.
+- No event beyond b_max reaches the 60% multiplicity threshold (tail share
+  0); at 70% the share is 1.2%, at 80% 7.8%. So 0-60% is complete.
+
 ## Status
 
 - [x] template written
 - [x] draws work: 110 ms per event at A = 208
 - [ ] N[5.02 TeV] tuned to ALICE dN_ch/deta (0-5%: 1943 +- 54) with the lattice EoS
-- [ ] cross section and b_max coverage
+- [x] cross section and b_max coverage (0.746 of sigma_inel below b_max; 0-60% complete)
 - [ ] SMASH sampled-rapidity scan; timing, grid extent, oversampling count
 - [ ] design generator, importance-sampling bins, OSG pilot

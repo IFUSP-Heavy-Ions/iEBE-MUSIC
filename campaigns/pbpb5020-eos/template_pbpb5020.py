@@ -7,7 +7,9 @@ Departures from JETSCAPE, chosen by the user (campaigns/pbpb5020-eos/NOTES.md):
 constant free-streaming time 1.5 fm (JETSCAPE: tau_R (eps/eps_R)^alpha with
 tau_R = 1.46 fm, alpha = 0.031); nuclei from the Isobar-Sampler with a hard
 core of 0.8 fm (correlation strength -1) instead of TRENTo's d_min = 1.44 fm;
-delta f: iSS 14-moment (bulk_deltaf_kind 11, SMASH-box coefficients).
+delta f: iSS 22-moment Grad (bulk_deltaf_kind 20) with the viscous yield
+capped at 2 N_eq per cell (RegVisYield 1), as JETSCAPE's |delta f| <= f_eq.
+iSS's 14-moment option (kind 11) gives a yield blow-up here; see NOTES.md.
 """
 
 control_dict = {   'initial_state_type': 'TRENTo',
@@ -15,7 +17,7 @@ control_dict = {   'initial_state_type': 'TRENTo',
     'afterburner_type': 'SMASH',
     'save_hydro_surfaces': False,
     'save_UrQMD_files': False,
-    'deltaf_models': {'Grad': {'deltaf_model': 0, 'bulk_deltaf_kind': 11}},
+    'deltaf_models': {'Grad': {'deltaf_model': 0, 'bulk_deltaf_kind': 20, 'RegVisYield': 1}},
     'hbt': True}
 
 isobars_conf_dict_target = {   'isobar_samples': {   'description': 'Options for the isobar nucleon-position samples',
@@ -276,7 +278,7 @@ music_dict = {   'beastMode': 2,
 iss_dict = {   'hydro_mode': 1,
     'include_deltaf_shear': 1,
     'include_deltaf_bulk': 1,
-    'bulk_deltaf_kind': 11,
+    'bulk_deltaf_kind': 20,
     'sample_upto_desired_particle_number': 1,
     'number_of_particles_needed': 100000,
     'local_charge_conservation': 0,
