@@ -741,9 +741,24 @@ def f_beta_max(row: dict[str, str], samples: dict) -> float:
     return 0.5
 
 
+def f_correlation(row: dict[str, str], props: dict | None, key: str,
+                  default: float) -> float:
+    """Short-range correlation of the nucleon sampler (correlation_length in
+    fm, correlation_strength; -1 is a hard core): the design column if
+    present, else the template's value.  Until 2026-11-24 both were written
+    as 0.4 and 0 whatever the template said."""
+    if str(row.get(key, "")).strip():
+        return float(row[key])
+    if props and key in props:
+        return float(props[key]["value"])
+    return default
+
+
 def format_isobar_dict(section_name: str, row: dict[str, str],
-                       samples: dict) -> str:
+                       samples: dict, props: dict | None = None) -> str:
     label = "target" if section_name == "target" else "projectile"
+    c_length = f_correlation(row, props, "correlation_length", 0.4)
+    c_strength = f_correlation(row, props, "correlation_strength", 0.0)
     seed_source = samples["seed_source"]["value"]
     master_seed = samples["master_seed"]["value"]
     pool_modulus = samples["pool_modulus"]["value"]
@@ -805,8 +820,8 @@ def format_isobar_dict(section_name: str, row: dict[str, str],
         f'            "shape_distribution": {{"description": "Per-event shape draw: wedge (Option B) or plane (Gaussian in the deformation plane, folded per draw)", "value": "{f_str(row, "shape_distribution", "plane")}"}},',
         f'            "sigma_plane": {{"description": "Width of the plane-form Gaussian; 0 is rigid, and works at beta_2 = 0", "value": {f_sigma(row, "sigma_plane")}}},',
         f'            "plane_anisotropy": {{"description": "Splits sigma_plane with fixed geometric mean; 0 is isotropic, positive favours prolate/oblate, negative favours triaxial", "value": {f_sigma(row, "plane_anisotropy")}}},',
-        '            "correlation_length": {"description": "Short-range correlation length (fm)", "value": 0.4},',
-        '            "correlation_strength": {"description": "Short-range correlation strength", "value": 0.0},',
+        f'            "correlation_length": {{"description": "Short-range correlation length (fm)", "value": {c_length}}},',
+        f'            "correlation_strength": {{"description": "Short-range correlation strength", "value": {c_strength}}},',
         '        },',
         '    },',
         '}',
@@ -840,9 +855,13 @@ def write_design_point_file(output_dir: Path, index_one_based: int,
         "",
         "# isobar-sample",
         "",
-        format_isobar_dict("target", row, samples),
+        format_isobar_dict("target", row, samples,
+                           config["isobars_conf_dict_target"]
+                           ["isobar_properties"]["isobar1"]),
         "",
-        format_isobar_dict("projectile", row, samples),
+        format_isobar_dict("projectile", row, samples,
+                           config["isobars_conf_dict_projectile"]
+                           ["isobar_properties"]["isobar1"]),
         "",
     ]
 
