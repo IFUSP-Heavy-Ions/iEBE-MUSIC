@@ -14,7 +14,7 @@ RHIC + LHC fit). `template_pbpb5020.py` holds them.
 | | value | note |
 |---|---|---|
 | TRENTo p, sigma_k, w | 0.063, 1.05 (k = 0.907), 1.12 fm | |
-| N[5.02 TeV] | tuned here | the MAP gives 14.2 at 2.76 TeV only |
+| N[5.02 TeV] | 20.0 | tuned to ALICE dN_ch/deta 0-5% (1943 +- 54): 1956 +- 47 over 12 events evenly in 0-5%, lattice EoS, decays only (the MAP gives 14.2 at 2.76 TeV only) |
 | sigma_NN | 7.0 fm^2 | conventional TRENTo value at 5.02 TeV |
 | nuclei | 208Pb, R = 6.62 fm, a = 0.546 fm, spherical | Isobar-Sampler |
 | nucleon hard core | 0.8 fm (correlation strength -1) | JETSCAPE's d_min = 1.44 fm is weakly constrained; user's choice |
@@ -97,7 +97,7 @@ From `scripts/cross_section/xsec_point.py`, n_conf 600:
 
 - [x] template written
 - [x] draws work: 110 ms per event at A = 208
-- [ ] N[5.02 TeV] tuned to ALICE dN_ch/deta (0-5%: 1943 +- 54) with the lattice EoS
+- [x] N[5.02 TeV] = 20.0 (decays only; to be checked with SMASH)
 - [x] cross section and b_max coverage (0.746 of sigma_inel below b_max; 0-60% complete)
 - [ ] SMASH sampled-rapidity scan; timing, grid extent, oversampling count
 - [ ] design generator, importance-sampling bins, OSG pilot
