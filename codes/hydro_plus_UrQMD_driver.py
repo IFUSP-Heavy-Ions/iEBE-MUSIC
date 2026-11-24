@@ -972,6 +972,21 @@ def connect_trento_event(res_path, initial_type, filename, free_stream_tau,
         print("   \U0001F9FE  lattice from TRENTo output: {} cells, dx={:.4f}, "
               "half-width +-{:.3f} fm".format(n_actual, grid_step, grid_max),
               flush=True)
+        # MUSIC takes the box size from the table's coordinates but reads
+        # Grid_size_in_x/y rows of it: a mismatch reads past the table and
+        # runs hydro on garbage without any error.
+        music_input = path.join("MUSIC", "music_input_mode_2")
+        for key in ("Grid_size_in_x", "Grid_size_in_y"):
+            value = read_input_value(music_input, key)
+            if value is not None and int(float(value)) != n_actual:
+                raise ValueError(
+                    "MUSIC {} = {} but the initial-condition table has {} "
+                    "cells (TRENTo grid-max {:.3f} fm, step {:.3f} fm): make "
+                    "trento_dict grid-max, free_streaming_dict grid_max and "
+                    "music_dict X/Y_grid_size_in_fm/2 the same half-width, "
+                    "with Grid_size_in_x/y = 2 grid-max/grid-step".format(
+                        key, int(float(value)), n_actual, grid_max,
+                        grid_step))
         fs = freestream.FreeStreamer(initial, grid_max, free_stream_tau)
         e = fs.energy_density()
         e_path = path.join(res_path, "e.dat")
