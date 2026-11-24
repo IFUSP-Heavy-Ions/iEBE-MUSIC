@@ -157,13 +157,16 @@ ENV HOME /opt/
 #             (MUSIC bce37cf: EOS_table_file; only runs with an eos_dict change)
 #   5c19ce8 = "Pin MUSIC 26a2d40: O(1) row search for tabulated EoS"
 #             (EOS 24 hydro ~5% slower than EOS 9 instead of ~50%; output unchanged)
+#   44d5e53 = "merge_qn: also refuse files whose Q grid differs"
+#             (optional HBT sums in qn_<id>.h5, control_dict['hbt']; off by
+#              default, every other output unchanged)
 RUN cd ${HOME} && \
     mkdir iEBE-MUSIC && cd iEBE-MUSIC && \
     git init -q . && \
     git remote add origin https://github.com/IFUSP-Heavy-Ions/iEBE-MUSIC.git && \
-    git fetch -q --depth=1 origin 5c19ce8d5c63d53d41551976174f32928e5b2a26 && \
+    git fetch -q --depth=1 origin 44d5e53321dc0e3b39060c736d85d5d9c4a38434 && \
     git checkout -q FETCH_HEAD && \
-    test "$(git rev-parse HEAD)" = "5c19ce8d5c63d53d41551976174f32928e5b2a26" && \
+    test "$(git rev-parse HEAD)" = "44d5e53321dc0e3b39060c736d85d5d9c4a38434" && \
     cd codes && \
     bash get_code_packages.sh && \
     ./compile_code_packages.sh && \
