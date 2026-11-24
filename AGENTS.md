@@ -254,6 +254,16 @@ defaults — prefer those over guessing flags.
   (34 aborted SMASH, 540 lost 490); it is now counted from `OSCAR.DAT` per run. (d) Both
   cascades end with eta and Sigma0 undecayed; `codes/standard_output.py` decays them before
   summing. The toolkit tables of a UrQMD run still lack (d).
+- **HBT comes from the standard output's optional sums (`control_dict['hbt']`), not from the
+  toolkit's `analyze_HBT`** (`docs/standard_output.md` section 9, `docs/notes/hbt_sums.md`).
+  The toolkit's pair HBT gives all zeros on decays-only lists (its `read_in_mode 9` reader
+  never advances the event index; upstream too). On UrQMD output it is biased: file 13 puts
+  the 35% of pions that never collide at t = 8000 fm, and the pair weight is not invariant
+  under free streaming. Two rules for anyone reading the sums: (a) never add `S` across Phi
+  bins, because out and side are per particle; sum `hbt_num`/`hbt_pairs` as real values
+  (adding S makes peripheral R_out and R_side 15-25% too large). (b) Compare radii, not
+  lambda: each particle in its own LCMS gives radii within 1-3% of exact pairs but lambda
+  1-8% high.
 - **RTA delta f with τ_R ∝ E^γ: `bulk_deltaf_kind 31` + `deltaf_newRTA_gamma`, since iSS pin `bbc4f9e`.**
   A backport of upstream iSS's branch `newRTA`, which was never merged there and renames the
   parameter to `deltaf_kind`; the fork keeps `bulk_deltaf_kind`. γ must be in [0, 1.5] (iSS exits

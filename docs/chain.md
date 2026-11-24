@@ -359,6 +359,11 @@ longer written (`control_dict['toolkit_tables'] = True` brings them back,
 e.g. to compare with an earlier campaign); `scripts/osg/consolidate_dps.sh`
 merges whichever format a design point has, and only one of them, because the
 analysis adapter refuses a folder holding both.
+`control_dict['hbt']` adds HBT sums to the chosen delta f variants of
+`qn_<id>.h5`: per-event pair weights for pions per K_T, Phi and q, about
+185 kB per variant (section 9 of the same document). Use these, not the
+toolkit's `analyze_HBT`, which reads decays-only lists wrongly and is biased
+on UrQMD output (`docs/notes/hbt_sums.md`).
 Per job, one tarball with 20 event h5 files (both kinds) plus the TRENTo
 summaries, grid extents and `events_drawn_<proc>.csv`.
 

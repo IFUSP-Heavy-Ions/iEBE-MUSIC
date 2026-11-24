@@ -1672,8 +1672,12 @@ def standard_output_variant(conf, particle_file, event_id, name, iss_args):
         if y_cut is None:
             y_cut = (min(-y_range[0], y_range[1])
                      - float(conf.get("edge_margin", 1.25)))
+    # optional HBT sums (control_dict['hbt']) for the variants it lists
+    hbt = so.hbt_settings(conf.get("hbt"))
+    if not so.hbt_wanted(hbt, name):
+        hbt = None
     sums = so.accumulate(kind, particle_file, y_range, y_cut, table,
-                         so.decay_seed(int(event_id), name))
+                         so.decay_seed(int(event_id), name), hbt=hbt)
     if sums["nsamples"] == 0:
         # a surface was there (empty ones are caught before iSS), so iSS or
         # the afterburner failed; never record that as an event without

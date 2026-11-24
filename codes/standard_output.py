@@ -5,14 +5,17 @@ Reads the final particle list of one event -- the chain's own binary (decays
 only), UrQMD output converted by the toolkit's convert_to_binary, or a SMASH
 OSCAR2013 extended binary -- and sums, per species row and pT bin, the
 particle count, exp(i n phi) for n <= 10, pT^1..4, mT and pT exp(i n phi) for
-n <= 3.  The driver calls accumulate() once per delta f variant and
-write_event_file() once per event; the merger (scripts/merge_qn.py)
-concatenates the per-event files of a design point.
+n <= 3.  Optionally (control_dict['hbt']) it also sums, per identical
+species, K_T bin, Phi bin and q point, the HBT pair weights |S|^2 - N
+(section 9 of the document).  The driver calls accumulate() once per delta f
+variant and write_event_file() once per event; the merger
+(scripts/merge_qn.py) concatenates the per-event files of a design point.
 
 Command line, for tests:
 
     standard_output.py <decay|urqmd|smash> <particle file> <out.h5>
         [--event-id N] [--y-range YLB YRB] [--y-cut Y] [--iss-table FILE]
+        [--hbt [JSON]]
 """
 
 import argparse
@@ -68,10 +71,16 @@ SMASH_DT = np.dtype([("t", "<f8"), ("x", "<f8"), ("y", "<f8"), ("z", "<f8"),
                      ("t_last", "<f8"), ("mother1", "<i4"),
                      ("mother2", "<i4"), ("baryon", "<i4"),
                      ("strangeness", "<i4")])
-# the common in-memory form
+# the common in-memory form; (t, x, y, z) is where the code last recorded the
+# particle [fm]: the emission or decay point (decays only, UrQMD after a
+# collision), or the end of the run (UrQMD without a collision, SMASH).  The
+# HBT sums use coordinates that do not change under free streaming, so any
+# point on the particle's straight line gives the same result.
 PART_DT = np.dtype([("pdg", "<i4"), ("charge", "<i4"), ("mass", "<f8"),
                     ("E", "<f8"), ("px", "<f8"), ("py", "<f8"),
-                    ("pz", "<f8")])
+                    ("pz", "<f8"), ("t", "<f8"), ("x", "<f8"), ("y", "<f8"),
+                    ("z", "<f8")])
+KINE = ("E", "px", "py", "pz", "t", "x", "y", "z")
 
 # UrQMD particle types -> PDG, keyed by (ityp, charge); only what the rows,
 # the end-of-cascade decays and the bookkeeping need
@@ -98,6 +107,10 @@ END_DECAYS = {
 }
 DAUGHTER = {22: (0.0, 0), 111: (0.138, 0), 211: (0.138, 1), -211: (0.138, -1),
             3122: (1.116, 0), -3122: (1.116, 0)}
+# widths [GeV] of the END_DECAYS mothers, for the decay vertices (c tau of
+# 1.5e5 fm and 2.2e4 fm: their daughters are uncorrelated in HBT)
+END_DECAY_WIDTH = {221: 1.31e-6, 3212: 8.9e-6, -3212: 8.9e-6}
+HBARC = 0.19733  # GeV fm
 
 
 # ----------------------------------------------------------------- readers
@@ -110,7 +123,7 @@ def _chain_events(name, charge_of):
         rec = data[off:off + n*CHAIN_DT.itemsize].view(CHAIN_DT)
         off += n*CHAIN_DT.itemsize
         out = np.empty(n, PART_DT)
-        for k in ("pdg", "mass", "E", "px", "py", "pz"):
+        for k in ("pdg", "mass") + KINE:
             out[k] = rec[k]
         out["charge"] = charge_of(rec["pdg"])
         yield out
@@ -129,7 +142,7 @@ def _urqmd_events(name):
         rec = data[off:off + n*URQMD_DT.itemsize].view(URQMD_DT)
         off += n*URQMD_DT.itemsize
         out = np.empty(n, PART_DT)
-        for k in ("charge", "mass", "E", "px", "py", "pz"):
+        for k in ("charge", "mass") + KINE:
             out[k] = rec[k]
         key = rec["ityp"].astype(np.int64)*16 + rec["charge"]
         i = np.clip(np.searchsorted(keys, key), 0, len(keys) - 1)
@@ -164,7 +177,7 @@ def _smash_events(name):
             rec = data[off:off + n*SMASH_DT.itemsize].view(SMASH_DT)
             off += n*SMASH_DT.itemsize
             out = np.empty(n, PART_DT)
-            for k in ("pdg", "charge", "mass", "E", "px", "py", "pz"):
+            for k in ("pdg", "charge", "mass") + KINE:
                 out[k] = rec[k]
             yield out
         elif block == b"f":
@@ -271,9 +284,14 @@ def _decay(rng, parent, masses):
     return [a, b, third]
 
 
-def end_decays(parts, rng):
+def end_decays(parts, rng, rng_vertex=None):
     """Decay eta and Sigma0 (END_DECAYS) in a particle array; returns the new
-    array and the number of decays done."""
+    array and the number of decays done.
+
+    The daughters start at the decay vertex: the mother's recorded point plus
+    its velocity times a lab lifetime drawn from rng_vertex (at the mother's
+    point when rng_vertex is None).  The vertices draw from their own
+    generator, so the momenta are the same with or without them."""
     todo = np.isin(parts["pdg"], list(END_DECAYS))
     if not todo.any():
         return parts, 0
@@ -284,6 +302,14 @@ def end_decays(parts, rng):
         if not len(sel):
             continue
         p4 = np.column_stack([sel["E"], sel["px"], sel["py"], sel["pz"]])
+        # decay vertex: proper lifetime tau0 [fm], lab displacement p/M tau0
+        tau0 = (rng_vertex.exponential(HBARC/END_DECAY_WIDTH[pdg], len(sel))
+                if rng_vertex is not None else np.zeros(len(sel)))
+        mass = np.maximum(sel["mass"], 1e-6)
+        vtx = np.column_stack([sel["t"] + sel["E"]/mass*tau0,
+                               sel["x"] + sel["px"]/mass*tau0,
+                               sel["y"] + sel["py"]/mass*tau0,
+                               sel["z"] + sel["pz"]/mass*tau0])
         u = rng.uniform(0, 1, len(sel))
         cum = np.cumsum([c[0] for c in channels])
         cum /= cum[-1]
@@ -298,6 +324,7 @@ def end_decays(parts, rng):
                 arr["pdg"], arr["charge"] = d, DAUGHTER[d][1]
                 arr["mass"] = DAUGHTER[d][0]
                 arr["E"], arr["px"], arr["py"], arr["pz"] = v.T
+                arr["t"], arr["x"], arr["y"], arr["z"] = vtx[m].T
                 keep.append(arr)
     return np.concatenate(keep), int(todo.sum())
 
@@ -314,12 +341,211 @@ def _rows(parts):
     return row
 
 
-def accumulate(kind, name, y_range, y_cut=None, iss_table=None, seed=None):
+# ------------------------------------------------------------- HBT sums
+# Optional (docs/standard_output.md, section 9).  For every particle of a
+# species, the emission coordinates in its own LCMS (pT along "out", pz = 0):
+#     a = x_out - beta_T t,  b = x_side,  c = z    (beta_T = pT/mT)
+# which do not change under free streaming; per event, per (species, K_T bin,
+# lab Phi bin) and per q point S(q) = sum_i exp[i (q_o a + q_s b + q_l c)/hbarc]
+# over all oversamples, and the file holds |S|^2 - N = sum over pairs i != j
+# of cos(q.dx~), summed over the species of a row.  C(q) - 1 of a set of
+# events is sum(hbt_num)/sum(hbt_pairs), summed over Phi bins as real values
+# (never by adding S of different Phi bins: out and side are per particle).
+
+# half of the 26-point Lebedev rule (C(-q) = C(q)): 3 axes, 6 face diagonals,
+# 4 body diagonals, with the full-sphere weight of each point
+LEBEDEV26_HALF = (
+    [((1, 0, 0), 1/21), ((0, 1, 0), 1/21), ((0, 0, 1), 1/21)]
+    + [(d, 4/105) for d in ((1, 1, 0), (1, -1, 0), (1, 0, 1), (1, 0, -1),
+                            (0, 1, 1), (0, 1, -1))]
+    + [(d, 27/840) for d in ((1, 1, 1), (1, 1, -1), (1, -1, 1), (1, -1, -1))])
+HBT_DEFAULTS = {
+    # delta f variants that get HBT sums: "all" or a list of names
+    # (control_dict['deltaf_models'] keys; "default" without them)
+    "variants": "all",
+    # one output row per group: like-sign pairs of each species, summed over
+    # the group (pi+pi+ and pi-pi- together by default)
+    "rows": [[211, -211]],
+    # single-particle pT = K_T under the smoothness approximation [GeV]
+    "kt_edges": [0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60,
+                 0.70, 0.75, 0.80, 1.00, 1.50, 2.00],
+    "n_phi": 12,
+    # |q| [GeV] along each of the 13 directions
+    "q_mags": [0.005, 0.015, 0.025, 0.035, 0.045, 0.055, 0.065, 0.075, 0.085,
+               0.095, 0.12, 0.14, 0.16, 0.18, 0.20, 0.23, 0.26, 0.30, 0.40,
+               0.50],
+    # |y| < y_cut; None: the sampled range minus edge_margin (decays only),
+    # the standard output's own y_cut (UrQMD, SMASH)
+    "y_cut": None,
+    "edge_margin": 1.0,
+}
+HBT_CHUNK = 8000  # particles per block of exponentials (~100 MB peak)
+
+
+def hbt_settings(user):
+    """Resolved HBT settings (defaults filled in, grids built) from the
+    control_dict['hbt'] entry; None when HBT is off."""
+    if not user:
+        return None
+    s = dict(HBT_DEFAULTS)
+    if isinstance(user, dict):
+        unknown = set(user) - set(HBT_DEFAULTS) - {"enabled"}
+        if unknown:
+            raise ValueError("hbt: unknown keys %s" % sorted(unknown))
+        if not user.get("enabled", True):
+            return None
+        s.update({k: v for k, v in user.items() if k != "enabled"})
+    rows = [list(map(int, r)) for r in s["rows"]]
+    species = []
+    for r in rows:
+        for p in r:
+            if p in species:
+                raise ValueError("hbt: species %d in more than one row" % p)
+            species.append(p)
+    kt = np.array(s["kt_edges"], float)
+    if np.any(np.diff(kt) <= 0):
+        raise ValueError("hbt: kt_edges must increase")
+    mags = np.array(s["q_mags"], float)
+    if np.any(np.diff(mags) <= 0) or mags[0] <= 0:
+        raise ValueError("hbt: q_mags must be positive and increase")
+    dirs = np.array([d for d, _ in LEBEDEV26_HALF], float)
+    dirs /= np.linalg.norm(dirs, axis=1)[:, None]
+    wdir = np.array([w for _, w in LEBEDEV26_HALF])
+    # shells around each |q|: midpoints, from 0 to half a step past the last
+    shell = np.concatenate(([0.0], 0.5*(mags[1:] + mags[:-1]),
+                            [mags[-1] + 0.5*(mags[-1] - mags[-2])]))
+    vshell = 4.0*np.pi/3.0*(shell[1:]**3 - shell[:-1]**3)
+    q = (dirs[:, None, :]*mags[None, :, None]).reshape(-1, 3)
+    # d^3q of each point in the half space q.(1,1,1)-side: sum = half ball
+    qw = (wdir[:, None]*vshell[None, :]).reshape(-1)
+    n_phi = int(s["n_phi"])
+    member = np.array([[1 if p in r else 0 for p in species] for r in rows],
+                      np.int8)
+    return {"variants": s["variants"], "rows": rows, "species": species,
+            "member": member, "kt_edges": kt, "n_phi": n_phi,
+            "phi_edges": np.linspace(-np.pi, np.pi, n_phi + 1),
+            "q_dirs": dirs, "q_mags": mags, "q": q, "q_weight": qw,
+            "q_shell_edges": shell, "y_cut": s["y_cut"],
+            "edge_margin": float(s["edge_margin"])}
+
+
+def hbt_wanted(settings, variant):
+    if settings is None:
+        return False
+    v = settings["variants"]
+    return v == "all" or variant in (v if isinstance(v, (list, tuple)) else [v])
+
+
+def hbt_y_cut(settings, kind, y_range, y_cut):
+    """|y| window of the HBT sums for one particlization."""
+    if settings["y_cut"] is not None:
+        return float(settings["y_cut"])
+    if kind != "decay" and y_cut is not None:
+        return float(y_cut)
+    return min(-y_range[0], y_range[1]) - settings["edge_margin"]
+
+
+class HBTSums:
+    """S and N of one event and variant, accumulated over its oversamples."""
+
+    def __init__(self, settings, y_cut):
+        self.s = settings
+        self.y_cut = y_cut
+        self.ns = len(settings["species"])
+        self.nk = len(settings["kt_edges"]) - 1
+        self.nphi = settings["n_phi"]
+        self.ncell = self.ns*self.nk*self.nphi
+        self.S = np.zeros((self.ncell, len(settings["q"])), np.complex128)
+        self.N = np.zeros(self.ncell)
+        self.buf = []
+        self.nbuf = 0
+        self.qq = settings["q"]/HBARC
+
+    def add(self, parts):
+        """Particles of one oversample (PART_DT)."""
+        isp = np.full(len(parts), -1)
+        for k, p in enumerate(self.s["species"]):
+            isp[parts["pdg"] == p] = k
+        sel = isp >= 0
+        if not sel.any():
+            return
+        p = parts[sel]
+        isp = isp[sel]
+        pt = np.hypot(p["px"], p["py"])
+        mt = np.sqrt(np.maximum(p["E"]**2 - p["pz"]**2, 1e-30))
+        with np.errstate(divide="ignore", invalid="ignore"):
+            rap = 0.5*np.log((p["E"] + p["pz"])/(p["E"] - p["pz"]))
+        phi = np.arctan2(p["py"], p["px"])
+        ik = np.searchsorted(self.s["kt_edges"], pt, side="right") - 1
+        iphi = np.clip(np.floor((phi + np.pi)/(2*np.pi)*self.nphi).astype(int),
+                       0, self.nphi - 1)
+        ok = (ik >= 0) & (ik < self.nk) & np.isfinite(rap) \
+            & (np.abs(rap) < self.y_cut)
+        if not ok.any():
+            return
+        p, isp, ik, iphi, pt, mt = p[ok], isp[ok], ik[ok], iphi[ok], pt[ok], mt[ok]
+        # LCMS of the particle: boost along z to pz = 0, rotate pT onto out
+        bl = p["pz"]/p["E"]
+        gl = p["E"]/mt
+        tt = gl*(p["t"] - bl*p["z"])
+        zz = gl*(p["z"] - bl*p["t"])
+        c, s_ = p["px"]/np.where(pt > 0, pt, 1.0), p["py"]/np.where(pt > 0, pt, 1.0)
+        a = p["x"]*c + p["y"]*s_ - pt/mt*tt
+        b = -p["x"]*s_ + p["y"]*c
+        cell = (isp*self.nk + ik)*self.nphi + iphi
+        self.buf.append((cell, a, b, zz))
+        self.nbuf += len(cell)
+        if self.nbuf >= HBT_CHUNK:
+            self._flush()
+
+    def _flush(self):
+        if not self.buf:
+            return
+        cell = np.concatenate([x[0] for x in self.buf])
+        coords = [np.concatenate([x[i] for x in self.buf]) for i in (1, 2, 3)]
+        self.buf, self.nbuf = [], 0
+        order = np.argsort(cell, kind="stable")
+        cell = cell[order]
+        a, b, c = (x[order] for x in coords)
+        self.N += np.bincount(cell, minlength=self.ncell)
+        for i0 in range(0, len(cell), HBT_CHUNK):
+            sl = slice(i0, i0 + HBT_CHUNK)
+            ph = (np.outer(a[sl], self.qq[:, 0]) + np.outer(b[sl], self.qq[:, 1])
+                  + np.outer(c[sl], self.qq[:, 2]))
+            e = np.exp(1j*ph)
+            cs = cell[sl]
+            starts = np.flatnonzero(np.r_[True, cs[1:] != cs[:-1]])
+            self.S[cs[starts]] += np.add.reduceat(e, starts, axis=0)
+
+    def result(self):
+        """{'num' [nrow, nk, nphi, nq], 'pairs' [nrow, nk, nphi],
+        'N' [ns, nk, nphi], 'y_cut', 'settings'}"""
+        self._flush()
+        shape = (self.ns, self.nk, self.nphi)
+        S = self.S.reshape(shape + (-1,))
+        N = self.N.reshape(shape)
+        num_s = np.abs(S)**2 - N[..., None]
+        pairs_s = N*(N - 1.0)
+        member = self.s["member"]
+        num = np.einsum("rs,s...->r...", member.astype(float), num_s)
+        pairs = np.einsum("rs,s...->r...", member.astype(float), pairs_s)
+        return {"num": num, "pairs": pairs, "N": N, "y_cut": self.y_cut,
+                "settings": self.s}
+
+
+def hbt_empty(settings, y_cut):
+    """HBT sums of an event without particles."""
+    return HBTSums(settings, y_cut).result()
+
+
+def accumulate(kind, name, y_range, y_cut=None, iss_table=None, seed=None,
+               hbt=None):
     """Sums of one particle list (one event, one variant).
 
     y_range = (y_LB, y_RB) iSS sampled over; y_cut None sums every particle
     (decays only), else only |y| < y_cut.  seed feeds the end-of-cascade
-    decays (UrQMD, SMASH).
+    decays (UrQMD, SMASH).  hbt: resolved settings (hbt_settings()) to add
+    the HBT sums, else None.
     """
     npt = len(PT_EDGES) - 1
     ncell = N_SPECIES*npt
@@ -332,16 +558,26 @@ def accumulate(kind, name, y_range, y_cut=None, iss_table=None, seed=None):
     nyb = len(yedges) - 1
     yprof = np.zeros((4, nyb))
     rng = np.random.default_rng(seed) if kind != "decay" else None
+    # decay vertices draw from their own stream (the momenta stay as before)
+    rng_vertex = None
+    if rng is not None:
+        rng_vertex = np.random.default_rng(
+            None if seed is None else list(np.atleast_1d(seed)) + [0x7E47])
+    hbt_acc = None
+    if hbt is not None:
+        hbt_acc = HBTSums(hbt, hbt_y_cut(hbt, kind, y_range, y_cut))
     nsamples = 0
     ndecays = 0
     unknown_neutral = 0
     for parts in read_events(kind, name, iss_table):
         nsamples += 1
         if rng is not None:
-            parts, nd = end_decays(parts, rng)
+            parts, nd = end_decays(parts, rng, rng_vertex)
             ndecays += nd
         if not len(parts):
             continue
+        if hbt_acc is not None:
+            hbt_acc.add(parts)
         E, pz = parts["E"], parts["pz"]
         px, py = parts["px"], parts["py"]
         pt = np.hypot(px, py)
@@ -388,7 +624,7 @@ def accumulate(kind, name, y_range, y_cut=None, iss_table=None, seed=None):
     Qs = np.moveaxis(shape(Q, (N_HARMONICS,)), 0, 1)
     for r, nmax in enumerate(SPECIES_NMAX):
         Qs[r, nmax + 1:] = 0.0
-    return {
+    out = {
         "nsamples": nsamples,
         "Q": Qs,
         "Qpt": np.moveaxis(shape(Qpt, (N_QPT,)), 0, 1),
@@ -399,6 +635,9 @@ def accumulate(kind, name, y_range, y_cut=None, iss_table=None, seed=None):
         "end_decays": ndecays,
         "unknown_neutral": unknown_neutral,
     }
+    if hbt_acc is not None:
+        out["hbt"] = hbt_acc.result()
+    return out
 
 
 def species_mass(iss_table=None):
@@ -536,6 +775,9 @@ def write_event_file(path, root_attrs, events, variants, hydro=None,
         if variants:
             g.create_dataset("y_profile_edges",
                              data=variants[0][2]["y_profile_edges"])
+        hbt = [v[2]["hbt"]["settings"] for v in variants if "hbt" in v[2]]
+        if hbt:
+            _write_hbt_grid(g, hbt)
         e = f.create_group("events")
         for k, v in events.items():
             _ds(e, k, v)
@@ -563,15 +805,64 @@ def write_event_file(path, root_attrs, events, variants, hydro=None,
             _ds(v, "mtsum", s["mtsum"][None], np.float32)
             _ds(v, "Qpt", s["Qpt"][None], np.complex64)
             _ds(v, "y_profile", s["y_profile"][None], np.float32)
+            if "hbt" in s:
+                h = s["hbt"]
+                v.attrs["hbt_y_cut"] = h["y_cut"]
+                _ds(v, "hbt_num", h["num"][None], np.float32)
+                _ds(v, "hbt_pairs", h["pairs"][None], np.float64)
+                _ds(v, "hbt_N", h["N"][None], np.float32)
     os.replace(tmp, path)
 
 
-def empty_sums(y_range):
+def _write_hbt_grid(g, settings_list):
+    s = settings_list[0]
+    for other in settings_list[1:]:
+        for k in ("species", "rows", "n_phi"):
+            if other[k] != s[k]:
+                raise ValueError("HBT settings differ between variants")
+        for k in ("kt_edges", "q"):
+            if not np.array_equal(other[k], s[k]):
+                raise ValueError("HBT settings differ between variants")
+    g.create_dataset("hbt_species", data=np.array(s["species"], np.int32))
+    g.create_dataset("hbt_rows", data=s["member"])
+    g["hbt_rows"].attrs["meaning"] = (
+        "hbt_rows[r, s] = 1 if species hbt_species[s] is in output row r: "
+        "row r sums the like-sign pairs of each of its species")
+    g.create_dataset("hbt_kt_edges", data=s["kt_edges"])
+    g["hbt_kt_edges"].attrs["meaning"] = (
+        "single-particle pT [GeV] (= K_T in the smoothness approximation)")
+    g.create_dataset("hbt_phi_edges", data=s["phi_edges"])
+    g["hbt_phi_edges"].attrs["meaning"] = "lab azimuth of pT [rad]"
+    g.create_dataset("hbt_q", data=s["q"])
+    g["hbt_q"].attrs["frame"] = ("LCMS of each particle: (q_out, q_side, "
+                                 "q_long), out along its pT")
+    g["hbt_q"].attrs["unit"] = "GeV"
+    g["hbt_q"].attrs["order"] = ("hbt_q[i*n_mag + k] = hbt_q_magnitudes[k] "
+                                 "* hbt_q_directions[i]")
+    g.create_dataset("hbt_q_directions", data=s["q_dirs"])
+    g.create_dataset("hbt_q_magnitudes", data=s["q_mags"])
+    g.create_dataset("hbt_q_shell_edges", data=s["q_shell_edges"])
+    g.create_dataset("hbt_q_weight", data=s["q_weight"])
+    g["hbt_q_weight"].attrs["meaning"] = (
+        "d^3q [GeV^3] of each point (26-point Lebedev weight x shell "
+        "volume): sum_i w_i f(q_i) approximates the integral of an even f "
+        "over half of q-space, |q| < hbt_q_shell_edges[-1]")
+    g.attrs["hbt_coordinates"] = (
+        "a = x_out - beta_T t, b = x_side, c = z in each particle's LCMS; "
+        "hbt_num = |S|^2 - N with S = sum exp(i q.(a, b, c)/hbarc) over all "
+        "oversamples, per (row species, K_T bin, Phi bin); sum Phi bins as "
+        "real values, never by adding S across Phi bins")
+
+
+def empty_sums(y_range, hbt=None, kind="decay", y_cut=None):
     """Sums of an event without particles (no_surface)."""
     npt = len(PT_EDGES) - 1
     yedges = np.arange(y_range[0] - Y_PROFILE_MARGIN,
                        y_range[1] + Y_PROFILE_MARGIN + 1e-9, Y_PROFILE_STEP)
-    return {"nsamples": 0,
+    extra = {}
+    if hbt is not None:
+        extra["hbt"] = hbt_empty(hbt, hbt_y_cut(hbt, kind, y_range, y_cut))
+    return {**extra, "nsamples": 0,
             "Q": np.zeros((N_SPECIES, N_HARMONICS, npt), np.complex128),
             "Qpt": np.zeros((N_SPECIES, N_QPT, npt), np.complex128),
             "ptsum": np.zeros((N_SPECIES, N_PTPOW, npt)),
@@ -597,10 +888,16 @@ def main():
     ap.add_argument("--y-cut", type=float, default=None)
     ap.add_argument("--iss-table", default=None,
                     help="iSS particle table (decays only: gives the charges)")
+    ap.add_argument("--hbt", nargs="?", const="{}", default=None,
+                    metavar="JSON",
+                    help="add the HBT sums; optional JSON overrides of the "
+                         "defaults (HBT_DEFAULTS), e.g. '{\"n_phi\": 24}'")
     args = ap.parse_args()
     collection = "all" if args.y_cut is None else "window"
+    hbt = hbt_settings(json.loads(args.hbt) or True) if args.hbt else None
     s = accumulate(args.kind, args.particles, args.y_range, args.y_cut,
-                   args.iss_table, decay_seed(args.event_id, args.variant))
+                   args.iss_table, decay_seed(args.event_id, args.variant),
+                   hbt=hbt)
     attrs = {"y_sampled": list(args.y_range), "collection": collection,
              "y_cut": np.nan if args.y_cut is None else args.y_cut,
              "dy_width": (args.y_range[1] - args.y_range[0]

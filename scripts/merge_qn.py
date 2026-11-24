@@ -30,6 +30,9 @@ BLOCK = 128  # rows written at a time; equal to the chunk length
 STATUS = {"ok": 0, "no_collision": 1, "no_surface": 2, "hydro_failed": 3,
           "failed": 4}
 VARIANT_DATA = ("Q", "ptsum", "mtsum", "Qpt", "y_profile")
+# optional (control_dict['hbt']); a design point has them in every file or
+# in none, per variant
+HBT_DATA = ("hbt_num", "hbt_pairs", "hbt_N")
 EVENT_FLOAT = ("weight", "p_acc", "centrality", "estimator")
 
 
@@ -108,13 +111,16 @@ def merge(src_dir, out_path, selection=None):
         h0.copy("grid", out)
         # variant attributes and shapes from the first file
         vshape = {}
+        vdata = {}
         for v in variants:
             g = out.create_group("deltaf_" + v)
             for k, val in h0["deltaf_" + v].attrs.items():
                 if k != "end_decays":
                     g.attrs[k] = val
-            vshape[v] = {d: h0["deltaf_%s/%s" % (v, d)].shape[1:] for d in VARIANT_DATA}
-            vshape[v]["dtype"] = {d: h0["deltaf_%s/%s" % (v, d)].dtype for d in VARIANT_DATA}
+            vdata[v] = VARIANT_DATA + tuple(
+                d for d in HBT_DATA if d in h0["deltaf_" + v])
+            vshape[v] = {d: h0["deltaf_%s/%s" % (v, d)].shape[1:] for d in vdata[v]}
+            vshape[v]["dtype"] = {d: h0["deltaf_%s/%s" % (v, d)].dtype for d in vdata[v]}
         hydro_keys = list(h0["hydro"].keys()) if "hydro" in h0 else []
         hydro_cols = {k: h0["hydro/" + k].shape[2:] for k in hydro_keys}
         if "hydro" in h0:
@@ -138,7 +144,7 @@ def merge(src_dir, out_path, selection=None):
         vds = {v: {"nsamples": create(out["deltaf_" + v], "nsamples", (n,), np.int32)}
                for v in variants}
         for v in variants:
-            for d in VARIANT_DATA:
+            for d in vdata[v]:
                 vds[v][d] = create(out["deltaf_" + v], d, (n,) + vshape[v][d],
                                    vshape[v]["dtype"][d])
         hds = {}
@@ -153,7 +159,7 @@ def merge(src_dir, out_path, selection=None):
             buf = {k: np.full(m, np.nan) for k in EVENT_FLOAT + ("b", "mult")}
             st = np.zeros(m, np.uint8)
             vb = {v: {d: np.zeros((m,) + vshape[v][d], vshape[v]["dtype"][d])
-                      for d in VARIANT_DATA} for v in variants}
+                      for d in vdata[v]} for v in variants}
             ns = {v: np.zeros(m, np.int32) for v in variants}
             hb = {k: np.full((m, T) + hydro_cols[k], np.nan, np.float32)
                   for k in hydro_keys}
@@ -173,7 +179,14 @@ def merge(src_dir, out_path, selection=None):
                             g = h["deltaf_" + v]
                             ns[v][i] = g["nsamples"][0]
                             end_decays[v] += int(g.attrs.get("end_decays", 0))
-                            for d in VARIANT_DATA:
+                            has = tuple(d for d in HBT_DATA if d in g)
+                            if VARIANT_DATA + has != vdata[v]:
+                                raise ValueError(
+                                    "%s: deltaf_%s has HBT data %s, the first "
+                                    "file %s" % (files[ev], v, has or "none",
+                                                 vdata[v][len(VARIANT_DATA):]
+                                                 or "none"))
+                            for d in vdata[v]:
                                 vb[v][d][i] = g[d][0]
                         for k in hydro_keys:
                             if "hydro/" + k in h:
@@ -195,7 +208,7 @@ def merge(src_dir, out_path, selection=None):
                 ds[k][sl] = buf[k]
             for v in variants:
                 vds[v]["nsamples"][sl] = ns[v]
-                for d in VARIANT_DATA:
+                for d in vdata[v]:
                     vds[v][d][sl] = vb[v][d]
             for k in hydro_keys:
                 hds[k][sl] = hb[k]

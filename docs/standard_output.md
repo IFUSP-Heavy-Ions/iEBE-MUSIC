@@ -142,7 +142,9 @@ The `Q` axis order (event, species, harmonic, pT) is the adapter's
 Size per event and variant, uncompressed: about 140 kB (Q 92 kB, Qpt 25 kB,
 ptsum 17 kB, the rest 6 kB). Three variants: 420 kB per event, against 253 kB
 for campaign 2's merged files; one variant of a 20,000-event design point is
-2.8 GB in memory.
+2.8 GB in memory. A per-event file with three variants is 450 kB on disk
+(gzip gains nothing on these sums). The optional HBT sums (section 9) add
+about 185 kB per variant that has them.
 
 ## 3. Rapidity: what the sums cover
 
@@ -226,3 +228,98 @@ Fully differential output for charged hadrons only, as
 |eta| < 5.2, 0.1 wide), possibly with fewer harmonics and coarser pT forward;
 identified particles reduced to what the data need. To be specified when the
 first 3D campaign is planned.
+
+## 9. HBT sums (optional)
+
+Off by default. With `control_dict['hbt']` set to `True` (the defaults below) or
+to a dict of overrides, every listed delta f variant also carries the sums from
+which the analysis builds identical-particle correlation functions. A campaign
+chooses the variants: all of them, one, or none. The method and its validation
+are in `docs/notes/hbt_sums.md`.
+
+**What is summed.** Each particle of an HBT species with |y| < `hbt_y_cut` and
+pT inside `hbt_kt_edges` gets emission coordinates in its own LCMS (pT along
+"out", pz = 0):
+
+    a = x_out - beta_T t,   b = x_side,   c = z        (beta_T = pT/mT)
+
+These do not change when the particle streams freely. So the point a code
+records matters only through the particle's straight line: the emission or
+decay point (decays only), the last collision (UrQMD), or the end of the run
+(UrQMD particles that never collide, SMASH) all give the same coordinates.
+
+For every event, species, K_T bin (single-particle pT, which equals K_T in
+the smoothness approximation), lab Phi bin and q point, over all oversamples
+of the event:
+
+    S(q) = sum_i exp[i (q_out a_i + q_side b_i + q_long c_i)/hbarc],   N
+
+The file stores the pair sums:
+
+| dataset | definition | dtype |
+|---|---|---|
+| `hbt_num [E, R, K, F, nq]` | sum over the row's species of \|S\|^2 - N = sum over pairs i != j of cos(q.dx~) | float32 |
+| `hbt_pairs [E, R, K, F]` | sum over the row's species of N(N - 1) | float64 |
+| `hbt_N [E, Sp, K, F]` | N per species | float32 |
+
+Here R is the number of rows, K the K_T bins, F the Phi bins, Sp the species
+and nq the q points. The sums are raw: over all oversamples, not divided by
+anything. The variant attribute `hbt_y_cut` is the window used.
+
+**Grid** (`/grid`):
+- `hbt_species`: the species.
+- `hbt_rows [R, Sp]`: 1 where a species belongs to a row. Each row sums the
+  like-sign pairs of each of its species.
+- `hbt_kt_edges`, `hbt_phi_edges`: lab azimuth of pT, from -pi to pi.
+- `hbt_q [nq, 3]`: (q_out, q_side, q_long) in GeV, in the particle LCMS.
+- `hbt_q_directions [13, 3]`, `hbt_q_magnitudes`: with
+  q[i*n_mag + k] = magnitude[k] * direction[i].
+- `hbt_q_shell_edges`.
+- `hbt_q_weight [nq]`: the d^3q of each point, i.e. the 26-point Lebedev
+  weight times the volume of its |q| shell. sum_i w_i f(q_i) approximates the
+  integral of an even f over half of q-space.
+
+Only half of q-space is stored, because \|S(-q)\| = \|S(q)\|.
+
+**Defaults** (`standard_output.HBT_DEFAULTS`):
+- One row, pi+pi+ and pi-pi- summed: `rows = [[211, -211]]`.
+- K_T edges 0.15, 0.20, ..., 0.60, then 0.70, 0.75, 0.80, 1.00, 1.50, 2.00:
+  15 bins, which land on every STAR, ALICE and PHENIX bin edge.
+- 12 Phi bins.
+- 13 directions × 20 |q| values (0.005 to 0.095 in steps of 0.01, then 0.12,
+  0.14, 0.16, 0.18, 0.20, 0.23, 0.26, 0.30, 0.40, 0.50 GeV): 260 points.
+- `y_cut` None, meaning the sampled range minus `edge_margin` = 1 unit
+  (decays only), or the standard output's own y_cut (UrQMD, SMASH).
+
+That is 187 kB of `hbt_num` per event and variant, plus 3 kB. The cost is
+about 4 s per event and variant, with about 190 MB peak memory.
+
+**Reading.** The correlation function of a set of events is
+
+    C(q) - 1 = sum_ev (w/nsamples^2) sum_F hbt_num / sum_ev (w/nsamples^2) sum_F hbt_pairs
+
+The weight w/nsamples^2 counts pairs per real event, as in the experiments.
+This holds for bosons; spin-averaged identical fermions would take -1/2, but
+none is stored by default. Rules:
+- **Sum Phi bins as the real values above, never by adding S across Phi
+  bins.** Out and side are defined per particle, so adding S mixes frames. In
+  a peripheral event that gives R_out and R_side 15-25% too large.
+- K_T bins can be merged by summing `hbt_num` and `hbt_pairs`. That gives
+  the same result as merging S.
+- Azimuthally sensitive HBT: weight each Phi bin by
+  exp(-i n (Phi_F - Psi_n)), with Psi_n from the same event's Q-vectors, in
+  both numerator and denominator. Then correct for the bin width with
+  sinc(n Delta Phi/2): 0.955 for n = 2 and 0.90 for n = 3 with 12 bins.
+- Fit with the `hbt_q_weight` weights, as the experiments' binned 3D fits do
+  in effect. An unweighted fit to the star of points overweights small |q|
+  (lambda +0.07, radii +5-15% against a 3D-grid fit of the same sums). With
+  the weights, the star reproduces the 3D-grid fit within 1-3%.
+- **Compare radii and Levy parameters, not lambda.** Taking each particle in
+  its own LCMS gives radii within 1-3% of exact pair kinematics but lambda
+  1-8% higher. Levy alpha, which comes from the same small-q shape, has not
+  been checked against pairs yet.
+
+No final-state interactions are included: no Coulomb, no strong interaction.
+Kaon and proton correlation functions that the experiments fit with a
+final-state model (Lednicky, for K0S K0S and pp) are not plane-wave |S|^2;
+charged kaons with the Coulomb correction removed are.

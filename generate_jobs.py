@@ -940,6 +940,9 @@ def write_standard_output_conf(event_folder, param_folder, para_dict,
         # also write the hadronic_afterburner_toolkit tables
         # (spvn_results_<id>.h5), as before the standard output existed
         "toolkit_tables": bool(control.get('toolkit_tables', False)),
+        # optional HBT sums: None/False off, True the defaults, or a dict of
+        # overrides (standard_output.HBT_DEFAULTS)
+        "hbt": control.get('hbt'),
         "root_attrs": root,
     }
     with open(path.join(event_folder, 'standard_output.json'), 'w') as f:

@@ -43,6 +43,14 @@ control_dict = {
     'toolkit_tables': False,
     'afterburner_y_cut': None,
     'afterburner_edge_margin': 1.25,
+    # HBT sums in the standard output (docs/standard_output.md, section 9):
+    # per identical species, K_T bin, Phi bin and q point, the pair weights
+    # |S|^2 - N from which the analysis builds C(q).  None/False: off.  True:
+    # the defaults, about 185 kB per event and delta f variant.  A dict
+    # overrides them, e.g. {'variants': ['PTB'], 'n_phi': 24}; keys:
+    # variants ("all" or a list of deltaf_models names), rows ([[211, -211]]:
+    # pi+pi+ and pi-pi- summed), kt_edges, n_phi, q_mags, y_cut, edge_margin.
+    'hbt': None,
     'EOSType': 0,
     'EOSId': 0,
     'EOSFileName': "EoS.pkl",
