@@ -306,10 +306,17 @@ none is stored by default. Rules:
   a peripheral event that gives R_out and R_side 15-25% too large.
 - K_T bins can be merged by summing `hbt_num` and `hbt_pairs`. That gives
   the same result as merging S.
-- Azimuthally sensitive HBT: weight each Phi bin by
-  exp(-i n (Phi_F - Psi_n)), with Psi_n from the same event's Q-vectors, in
-  both numerator and denominator. Then correct for the bin width with
-  sinc(n Delta Phi/2): 0.955 for n = 2 and 0.90 for n = 3 with 12 bins.
+- Azimuthally sensitive HBT relative to Psi_n (from the same event's
+  Q-vectors): take the Fourier components of numerator and denominator over
+  the Phi bins, sum_F (...) exp(-i m (Phi_F - Psi_n)), for m = n, 2n and 3n,
+  each divided by sinc(m Delta Phi/2) for the bin width. Then rebuild C(q, Phi
+  - Psi_n). The m = n component alone is not enough: C is the exponential of
+  a cosine in Phi, so it carries the higher harmonics, and dropping them
+  biases the fitted amplitudes by 5-20%. Each event's random plane rotates its
+  lab bins, so over many events the relative angle is sampled continuously and
+  aliasing averages out. With 12 bins sinc(m Delta Phi/2) is 0.955 (m = 2),
+  0.90 (3), 0.83 (4) and 0.64 (6). This recipe was checked on a toy source
+  and on the 2026-11-24 smoke test (Data curation session).
 - Fit with the `hbt_q_weight` weights, as the experiments' binned 3D fits do
   in effect. An unweighted fit to the star of points overweights small |q|
   (lambda +0.07, radii +5-15% against a 3D-grid fit of the same sums). With
