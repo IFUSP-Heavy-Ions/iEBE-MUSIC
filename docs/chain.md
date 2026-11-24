@@ -219,6 +219,32 @@ z then means the same c_s^2(T) at every T_sw. generate_gpEOS's (l, sigma) is
 another model in `eos_models.py`, or a (T, c_s^2) file per design point
 (`eos_dict = {'cs2_table': ...}`).
 
+Two options matter for wide (unconstrained) priors:
+
+```json
+"kernel": {"type": "squared_exponential", "coordinate": "lnT", "length_lnT": 0.4, "sigma_phi": 0.6},
+"high_T": {"relax_to": 0.3333333333333333, "scale_GeV": 0.2, "top_GeV": 5.0}
+```
+
+- **`coordinate: lnT`** measures the correlation length in ln T, so it grows
+  with T. It resolves the structure near T_c and spends few modes at high T,
+  where the data say little. With T_grid 0.13-0.6 GeV, l = 0.4 and constant
+  mean 0.22, 4 modes keep 99% of the prior variance. They reproduce the
+  lattice (WB) c_s^2 to rms 0.007 and at worst 0.023 (at its dip near 150
+  MeV), with every |z| <= 1.
+- **`high_T`** continues every sample above the grid by a smooth relaxation
+  to 1/3, and the table is integrated up to `top_GeV`. Stiff samples need
+  this: with c_s^2 about 0.5, a 100 GeV/fm^3 cell is at T of about 1 GeV.
+  - With `top_GeV` 5 the table ends above 3e4 GeV/fm^3 for every sample, so
+    MUSIC never extrapolates.
+  - Without it, MUSIC's extrapolation above a table (imported from
+    luizafperin/MUSIC) relaxes T, P and c_s^2 independently towards fixed
+    asymptotes (c_s^2 to 0.333, P to 200 GeV/fm^3).
+  - That extrapolation stops the run when the table's last slope points away
+    from the asymptote, which about half of the samples of a constant-mean
+    prior would do.
+  - `eos_dict` accepts the same `high_T` for a `cs2_table`.
+
 *In a campaign.* `MakeDictionaries.py --eos-model spec.json` freezes the model
 once into `<output>/eos_model_<sha256 prefix>.json` (grid, mean, basis: the
 numbers every design point is evaluated with) and gives each point

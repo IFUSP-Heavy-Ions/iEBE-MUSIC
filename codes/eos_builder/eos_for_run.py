@@ -21,7 +21,8 @@ what MUSIC and iSS are given.
     }
 or
     eos_dict = {'cs2_table': '<T [GeV], c_s^2 file>',
-                'cs2_table_sha256': '...'}     # optional check
+                'cs2_table_sha256': '...',     # optional check
+                'high_T': {...}}               # optional, as in eos_models
 
 Relative paths are taken relative to the parameter file, then (on a grid
 worker, where shipped files land in the job folder) as a bare name in the
@@ -153,10 +154,19 @@ def cs2_source(eos_dict, param_dir):
             raise ValueError("eos_dict: %s has sha256 %s, the dictionary "
                              "expects %s" % (path, digest, want))
 
+        high = eos_dict.get("high_T")
+
         def make():
             d = np.loadtxt(path, ndmin=2)
-            return d[:, 0], d[:, 1]
-        return {"cs2_table_sha256": digest}, make
+            if not high:
+                return d[:, 0], d[:, 1]
+            T, phi = eos_models.extend_high_T(
+                d[:, 0], np.log(1.0/d[:, 1] - 1.0), high)
+            return T, 1.0/(1.0 + np.exp(phi))
+        desc = {"cs2_table_sha256": digest}
+        if high:
+            desc["high_T"] = {k: high[k] for k in sorted(high)}
+        return desc, make
     raise ValueError("eos_dict needs 'cs2_model' (+ 'coordinates') or "
                      "'cs2_table'")
 

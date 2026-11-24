@@ -21,7 +21,8 @@ Spec keys:
     model           "gp_logit_cs2"
     T_grid_GeV      [T_min, T_max, step]; T_min at or below every T_sw of the
                     campaign (the same z then means the same c_s^2(T) at
-                    every T_sw), T_max the table's top
+                    every T_sw), T_max the top of the GP (and of the table
+                    unless high_T extends it)
     mean            {"constant": c} (c_s^2), or {"file": path} with columns
                     T [GeV], c_s^2 covering the grid (linear in between); the
                     file's numbers are copied into the frozen model
@@ -29,7 +30,20 @@ Spec keys:
                      "sigma_phi": s}: Cov[phi(T), phi(T')] =
                     s^2 exp(-(T - T')^2/(2 l^2)).  generate_gpEOS's
                     (l, sigma) is length_GeV = l/1000 and
-                    sigma_phi = 0.05*sqrt(sigma) (its draws are scaled by 0.05)
+                    sigma_phi = 0.05*sqrt(sigma) (its draws are scaled by 0.05).
+                    With "coordinate": "lnT" and "length_lnT": l the distance
+                    is ln T - ln T' instead: the correlation length grows with
+                    T (l = 0.4 is a factor 1.5 in T), which keeps resolution
+                    near T_c and spends few modes at high T
+    high_T          optional {"relax_to": c, "scale_GeV": w, "top_GeV": T_top}:
+                    above the grid's T_max, phi relaxes smoothly (value and
+                    slope continuous) to phi(c) over the scale w,
+                        phi = phi_c + [A + (phi'_a + A/w)(T - T_a)] e^{-(T - T_a)/w},
+                    A = phi(T_a) - phi_c, up to T_top.  Every sample then ends
+                    in the same regime (c = 1/3: conformal) and the table
+                    reaches energy densities far above any hydro cell, so
+                    MUSIC never extrapolates (its extrapolation stops a run
+                    when the table's last slope points away from 1/3)
     n_modes         K, or "all"
     coordinates     "columns" (default): design columns <prefix>1..<prefix>K
                     hold z; "seed": one integer column <prefix>seed, and
@@ -85,8 +99,17 @@ def freeze(spec, base_dir="."):
     kern = spec["kernel"]
     if kern.get("type", "squared_exponential") != "squared_exponential":
         raise ValueError("kernel: only squared_exponential is implemented")
-    ell, sig = float(kern["length_GeV"]), float(kern["sigma_phi"])
-    C = sig**2*np.exp(-(T[:, None] - T[None, :])**2/(2*ell**2))
+    sig = float(kern["sigma_phi"])
+    coord = kern.get("coordinate", "T")
+    if coord == "T":
+        x, ell = T, float(kern["length_GeV"])
+    elif coord == "lnT":
+        x, ell = np.log(T), float(kern["length_lnT"])
+    else:
+        raise ValueError("kernel coordinate: 'T' or 'lnT'")
+    C = sig**2*np.exp(-(x[:, None] - x[None, :])**2/(2*ell**2))
+    if "high_T" in spec:
+        _check_high_T(spec["high_T"], T[-1])
     lam, psi = np.linalg.eigh(C)
     order = np.argsort(lam)[::-1]
     lam, psi = np.clip(lam[order], 0.0, None), psi[:, order]
@@ -139,7 +162,41 @@ def cs2_of(frozen, z):
     phi = np.asarray(frozen["phi_mean"]).copy()
     for k in range(B.shape[0]):  # fixed summation order
         phi += z[k]*B[k]
-    return np.asarray(frozen["T_GeV"]), 1.0/(1.0 + np.exp(phi))
+    T = np.asarray(frozen["T_GeV"])
+    high = frozen["spec"].get("high_T")
+    if high:
+        T, phi = extend_high_T(T, phi, high)
+    return T, 1.0/(1.0 + np.exp(phi))
+
+
+HIGH_T_STEP = 0.002  # GeV, spacing of the c_s^2 points above the GP
+
+
+def _check_high_T(high, t_a):
+    c = float(high["relax_to"])
+    if not 0 < c < 1:
+        raise ValueError("high_T relax_to: c_s^2 in (0, 1)")
+    if float(high["scale_GeV"]) <= 0:
+        raise ValueError("high_T scale_GeV must be positive")
+    if float(high["top_GeV"]) <= t_a:
+        raise ValueError("high_T top_GeV must be above the GP grid's T_max")
+
+
+def extend_high_T(T, phi, high):
+    """(T, phi) continued above T[-1] by a relaxation of phi to
+    phi(relax_to) over scale_GeV, with value and slope continuous at T[-1],
+    up to top_GeV (see high_T in the module doc)."""
+    _check_high_T(high, T[-1])
+    c, w, top = (float(high[k]) for k in ("relax_to", "scale_GeV", "top_GeV"))
+    phi_c = np.log(1.0/c - 1.0)
+    t_a = T[-1]
+    a = phi[-1] - phi_c
+    slope = (phi[-1] - phi[-2])/(T[-1] - T[-2])
+    n = int(np.ceil((top - t_a)/HIGH_T_STEP))
+    t_up = t_a + (top - t_a)*np.arange(1, n + 1)/n
+    u = t_up - t_a
+    phi_up = phi_c + (a + (slope + a/w)*u)*np.exp(-u/w)
+    return np.concatenate((T, t_up)), np.concatenate((phi, phi_up))
 
 
 def save_frozen(frozen, path):
