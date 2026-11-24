@@ -60,11 +60,16 @@ def num(row, key, default=np.nan):
         return default
 
 
-def check_hbt_grid(h, h0, name, variants):
-    """Refuse a file whose HBT grid or HBT rapidity window differs from the
-    first file's: their sums cannot be added."""
+GRID_CHECKED = ("pt_edges", "harmonics", "species_pdg", "species_nmax",
+                "y_profile_edges")
+
+
+def check_grid(h, h0, name, variants):
+    """Refuse a file whose grid (Q binning, HBT grid) or HBT rapidity window
+    differs from the first file's: the merged file has one grid, so its sums
+    could not be read correctly."""
     keys = sorted(k for k in set(h0["grid"]) | set(h["grid"])
-                  if k.startswith("hbt_"))
+                  if k.startswith("hbt_") or k in GRID_CHECKED)
     for k in keys:
         if (k not in h["grid"] or k not in h0["grid"]
                 or not np.array_equal(h["grid/" + k][()], h0["grid/" + k][()])):
@@ -188,7 +193,7 @@ def merge(src_dir, out_path, selection=None):
                             raise ValueError("%s has variants %s, expected %s" %
                                              (files[ev], h.attrs["variants"],
                                               ",".join(variants)))
-                        check_hbt_grid(h, h0, files[ev], variants)
+                        check_grid(h, h0, files[ev], variants)
                         for k in buf:
                             if "events/" + k in h:
                                 buf[k][i] = h["events/" + k][0]
