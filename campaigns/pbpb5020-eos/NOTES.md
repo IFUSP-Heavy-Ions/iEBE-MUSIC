@@ -111,12 +111,82 @@ image full-44d5e53, iSS sampled range y = +-2.5, +-3.5, +-4.5.
 - SMASH runs about 27 s per sample at +-2.5 and 34 s at +-4.5: 90% of the
   time per event.
 
-Caveat, still being checked: SMASH stops at End_Time = 100 fm/c (lab time).
-In the +-4.5 runs, about 5,800 particles per sample were still unformed
-(t = tau cosh eta_s > 100 fm/c) when it stopped; in the +-2.5 runs, about
-290. Those particles never rescatter. The charged plateau above is not
-sensitive to that, so identified spectra at |y| > 2 need a direct
-comparison with a later End_Time before the window is fixed.
+SMASH stops at End_Time = 100 fm/c (lab time). In the +-4.5 runs, about
+5,800 particles per sample were still unformed (t = tau cosh eta_s >
+100 fm/c) when it stopped; in the +-2.5 runs, about 290. Those particles
+never rescatter. The charged plateau above is not sensitive to that; see
+the next section.
+
+## SMASH End_Time and the rapidity window (2026-11-25)
+
+Event 2452, sampled +-4.5, the same 10 iSS samples run through SMASH twice:
+End_Time 100 with fixed 0.1 fm/c steps (the default), and 400 fm/c with no
+time steps (Time_Step_Mode None). Ratios 400/100, 0.5-unit bins of |y|:
+- Charged particles: dN/dy and <pT> agree within 0.4% at every |y| up to 4.5.
+- Pions: within about 1% up to |y| = 2.5, then <pT> 1.3-1.6% lower at 2.5-3.5.
+- Protons and antiprotons, 2 < |y| < 3.5: <pT> 5-16% higher, yields 5-10%
+  lower. This is the pion-wind and annihilation rescattering that stops at
+  100 fm/c.
+- At |y| < 2: no difference beyond the noise of 10 samples (about 5% for
+  protons).
+
+That matches tau cosh eta_s = 100 fm/c: rescattering up to tau = 26 fm is
+contained at |eta_s| < 2.
+- End_Time 400 with fixed steps costs about 12 min per sample, against
+  0.5 min at 100, so it is out.
+- Time_Step_Mode None at 400 fm/c costs about 1.8 times the default per sample.
+
+Choice: keep End_Time 100, sample y over +-3.25, and sum every observable,
+HBT included, over |y| < 2 (afterburner_y_cut = range - 1.25; hbt
+{'y_cut': 2.0}).
+
+## Oversampling (2026-11-25)
+
+How the chain oversamples:
+- run_afterburner.sh ran iSS 10 times per hydro event (hard-coded), and the
+  master divided number_of_particles_needed by 10.
+- Each iSS run draws max(1, int(N/10/(6 dN/dy of thermal pi+))) samples.
+- So every event got at least 10 samples; a central event got 40 at N = 1e5.
+- The loop count is now control_dict['iss_calls'] (default 10, unchanged).
+
+For <pT>, integrated flow and 4-particle cumulants the event-by-event
+fluctuations dominate once an event has M particles with M v_n^2 well
+above 1.
+- One central sample has about 9000 charged particles in |y| < 2:
+  M v3^2 = 5.6 for v3 = 0.025.
+- <pT> noise per sample is 0.8%, against dynamical fluctuations of about 1%.
+- With hydro about 6 min and SMASH about 30 s per sample, the optimum is
+  2-5 samples per central event.
+
+Template: iss_calls 1, number_of_particles_needed 10000. Measured, with
+the machine loaded:
+
+| event | samples | wall time | SMASH per sample |
+|---|---|---|---|
+| 2452 (central) | 4 | 7.6 min (was about 30) | 29 s |
+| 1707 (55%) | 60 | 5.5 min | 2 s |
+
+SMASH's cost scales with the particle count, so peripheral events, which
+get more samples, cost no more than central ones.
+
+## Centrality: where the knee is (2026-11-25)
+
+40,000 TRENTo events at b < 4 fm (5.53% of sigma_inel), plus the
+minimum-bias draws for b > 4:
+- At b < 0.5 fm the multiplicity fluctuates by sigma/m = 5.0% (skew +0.16).
+- The knee, the mean multiplicity at b = 0, sits at 0.57% centrality.
+
+Bin edges, in sigma above the knee:
+
+| centrality | 2.5% | 1% | 0.5% | 0.2% | 0.1% | 0.02% | 0.005% | 0.001% |
+|---|---|---|---|---|---|---|---|---|
+| (N - m0)/sigma | -1.9 | -0.55 | +0.1 | +0.8 | +1.2 | +2.0 | +2.6 | +3.2 |
+
+These are for TRENTo's own multiplicity. A final-state, finite-resolution
+estimator such as V0M makes the experimental bins less extreme, so the
+selection density should be smooth, with no cliffs at bin edges. The
+allocation (density of simulated events per percent of centrality) is to
+be decided; see scratchpad knee/alloc.py.
 
 ## Status
 
@@ -125,5 +195,7 @@ comparison with a later End_Time before the window is fixed.
 - [x] N[5.02 TeV] = 19.6 (20.0 decays only, minus SMASH's +1.7%)
 - [x] cross section and b_max coverage (0.746 of sigma_inel below b_max; 0-60% complete)
 - [x] SMASH sampled-rapidity scan; timing, grid extent
-- [ ] SMASH End_Time (100 fm/c) vs the forward rapidities; oversampling target
+- [x] SMASH End_Time (100 fm/c) vs the forward rapidities: window |y| < 2, range +-3.25
+- [x] oversampling: iss_calls 1, N 10000 (4 samples central)
+- [ ] importance-sampling allocation (user), draws (~10-15M), selection file
 - [ ] design generator, importance-sampling bins, OSG pilot

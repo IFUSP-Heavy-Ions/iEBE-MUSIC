@@ -10,6 +10,12 @@ core of 0.8 fm (correlation strength -1) instead of TRENTo's d_min = 1.44 fm;
 delta f: iSS 22-moment Grad (bulk_deltaf_kind 20) with the viscous yield
 capped at 2 N_eq per cell (RegVisYield 1), as JETSCAPE's |delta f| <= f_eq.
 iSS's 14-moment option (kind 11) gives a yield blow-up here; see NOTES.md.
+
+Sampling (NOTES.md, 2026-11-25): one iSS run per hydro event (iss_calls 1)
+with number_of_particles_needed 10000, i.e. about 4 oversamples in a central
+event and proportionally more in peripheral ones; y sampled over +-3.25 and
+every sum (standard output and HBT) over |y| < 2, where SMASH's End_Time of
+100 fm/c still contains the rescattering.
 """
 
 control_dict = {   'initial_state_type': 'TRENTo',
@@ -18,7 +24,8 @@ control_dict = {   'initial_state_type': 'TRENTo',
     'save_hydro_surfaces': False,
     'save_UrQMD_files': False,
     'deltaf_models': {'Grad': {'deltaf_model': 0, 'bulk_deltaf_kind': 20, 'RegVisYield': 1}},
-    'hbt': True}
+    'iss_calls': 1,
+    'hbt': {'y_cut': 2.0}}
 
 isobars_conf_dict_target = {   'isobar_samples': {   'description': 'Options for the isobar nucleon-position samples',
                           'number_configs': {   'description': 'Number of configurations to be '
@@ -280,7 +287,9 @@ iss_dict = {   'hydro_mode': 1,
     'include_deltaf_bulk': 1,
     'bulk_deltaf_kind': 20,
     'sample_upto_desired_particle_number': 1,
-    'number_of_particles_needed': 100000,
+    'number_of_particles_needed': 10000,
+    'y_LB': -3.25,
+    'y_RB': 3.25,
     'local_charge_conservation': 0,
     'global_momentum_conservation': 0}
 
