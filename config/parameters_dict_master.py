@@ -51,6 +51,13 @@ control_dict = {
     # variants ("all" or a list of deltaf_models names), rows ([[211, -211]]:
     # pi+pi+ and pi-pi- summed), kt_edges, n_phi, q_mags, y_cut, edge_margin.
     'hbt': None,
+    # iSS runs per hydro event (run_afterburner.sh).  Each run draws
+    # max(1, int(number_of_particles_needed/iss_calls/(6 dN/dy of thermal
+    # pi+))) oversamples, so with sample_upto_desired_particle_number = 1 an
+    # event gets about number_of_particles_needed/(6 dN/dy) samples, but never
+    # fewer than iss_calls.  10 is what every campaign before 2026-11-25 used
+    # (at least 10 samples per event); 1 lets central events have only a few.
+    'iss_calls': 10,
     'EOSType': 0,
     'EOSId': 0,
     'EOSFileName': "EoS.pkl",
@@ -1164,8 +1171,9 @@ def update_parameters_dict(par_dict_path, ran_seed):
     afterburner_type_str = str(afterburner_type).strip().lower()
     iss_dict.update(parameters_dict.iss_dict)
     iss_dict['randomSeed'] = ran_seed
+    iss_calls = int(parameters_dict.control_dict.get('iss_calls', 10))
     iss_dict['number_of_particles_needed'] = (int(
-        iss_dict['number_of_particles_needed']/10))
+        iss_dict['number_of_particles_needed']/iss_calls))
     hadronic_afterburner_toolkit_dict.update(
         parameters_dict.hadronic_afterburner_toolkit_dict)
     hadronic_afterburner_toolkit_dict['randomSeed'] = ran_seed

@@ -624,9 +624,17 @@ rm -fr ../hydro_event
 
 
 def generate_script_afterburner(folder_name, HBT_flag, afterburner_type,
-                                logfile):
-    """This function generates script for hadronic afterburner"""
+                                logfile, iss_calls=10):
+    """This function generates script for hadronic afterburner.
+
+    iss_calls (control_dict['iss_calls']) is how many times iSS runs per hydro
+    event, each run drawing its own oversamples; the default 10 writes the
+    same script as before the option existed.
+    """
     working_folder = folder_name
+    iss_calls = int(iss_calls)
+    if iss_calls < 1:
+        raise ValueError("control_dict['iss_calls'] must be >= 1")
 
     if afterburner_type == "SMASH":
         sub_ev_prefix = "SMASHev"
@@ -654,7 +662,7 @@ mkdir -p {results_dir}
 rm -fr {results_dir}/*
 
 surfaceFile=`ls hydro_event | grep "surface"`
-for iev in {{0..9}}
+for iev in {{0..{last_call}}}
 do
     export OMP_NUM_THREADS=1
     cd iSS
@@ -683,7 +691,8 @@ do
     cp ../hydro_event/music_input results/music_input
     cp ../hydro_event/spectators.dat results/spectators.dat 2>/dev/null
     if [ $SubEventId = "0" ] && [ $iev -eq "0" ]; then
-    """.format(sub_ev_prefix=sub_ev_prefix, results_dir=results_dir))
+    """.format(sub_ev_prefix=sub_ev_prefix, results_dir=results_dir,
+               last_call=iss_calls - 1))
     script.write("    ./iSS.e randomSeed=$RANDOMSEED $ISS_ARGS 2>&1 {0}".format(
         logfile))
     script.write("""
@@ -1211,7 +1220,8 @@ def generate_event_folders(initial_condition_database, initial_condition_type,
                                 afterburner_type)
 
     generate_script_afterburner(event_folder, HBT_flag, afterburner_type,
-                                logfile)
+                                logfile,
+                                para_dict.control_dict.get('iss_calls', 10))
 
     generate_script_analyze_spvn(event_folder, HBT_flag, logfile)
 
