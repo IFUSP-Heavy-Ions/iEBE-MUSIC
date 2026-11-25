@@ -114,6 +114,11 @@ The campaign-2 image is `iebe-music_slim_17ae5b4_f5242628.sif`
 The image of framework revision `6604e5f` (importance sampling, faster nucleus
 sampler; same physics, reference events bit-identical to campaign 2) is
 `iebe-music_slim_6604e5f_2271081a.sif`, md5 `2271081afc8156eb530c732d53133884`.
+The pbpb5020-eos image (framework `d7a76b0`: `iss_calls`, EoS priors with a
+high-T relaxation, HBT sums; SMASH, so the full build) is
+`iebe-music_full_d7a76b0_ce7aac59.sif`, md5 `ce7aac598dc500916f314b7b0bb7cd6a`,
+768,720,896 bytes (published 2026-11-25; local copy in
+`/data/mluzum/chain_staging/images/`).
 
 ## 4. How a run is made
 
@@ -500,8 +505,8 @@ explicitly and start a new results tree; do not mix pins inside one campaign.
   tables, because iSS's stream is reseeded by last-bit differences in the hydro).
   Local re-runs are bit-identical. Treat "same event ⇒ same particles" as false
   across hardware.
-- **The OSG SMASH branch hardcodes `event_0`** (no event range). Use the UrQMD
-  branch, or `afterburner_type: "decay"`, until that is fixed.
+- **The OSG SMASH branch used to hardcode `event_0`** (no event range). Fixed
+  on 2026-11-25: every afterburner now uses the same generator path.
 - **No main-design status file** exists (the extension has `STATUS_A96_c2_ext.md`);
   the 1,000-point design has to be summarised from `merged/*/sources.txt` and the
   drawn-event CSVs.

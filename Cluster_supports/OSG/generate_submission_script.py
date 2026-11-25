@@ -200,7 +200,13 @@ def build_transfer_output_tarball_name():
     return "job_output_$(Process).tar.gz"
 
 
-# ── UrQMD mode (original logic) ──────────────────────────────────────────────
+# ── Every afterburner (decay, UrQMD, SMASH) ─────────────────────────────────
+# The "urqmd" names are historical. Until 2026-11-25 SMASH had its own pair
+# of writers, an older copy that never got the event range
+# (--event_start_id), the event list (IEBE_EVENT_LIST_FILE), the per-job
+# archive or the campaign seed: every SMASH job ran event_0 with the same ids.
+# Nothing in these writers depends on the afterburner, which generate_jobs.py
+# reads from the parameter file, so all afterburners now share them.
 
 def write_submission_script_urqmd(para_dict_):
     jobName = "iEBEMUSIC_{}".format(para_dict_["job_name"])
@@ -611,248 +617,14 @@ fi
     chmod("run_singularity.sh", 0o755)
 
 
-# ── SMASH mode (TRENTo + isobar seeds) ───────────────────────────────────────
-
-def write_submission_script_smash(para_dict_):
-    jobName = "iEBEMUSIC_{}".format(para_dict_["job_name"])
-    random_seed = campaign_seed_add()
-    imagePathHeader = "osdf://"
-    seed_file = None
-    if declared_seed_source(para_dict_["param_file"]) != "philox":
-        seed_file = detect_seed_file(para_dict_["param_file"])
-    script = open(FILENAME, "w")
-    home_log_dir = path.join(path.expanduser("~"), "log")
-    makedirs(home_log_dir, exist_ok=True)
-
-    # Build arguments: param_file $(Process) n_events n_threads seed [bayes_file] [seed_file]
-    if para_dict_["bayesFlag"]:
-        args_str = "{0} $(Process) {1} {2} {3} {4}".format(
-            para_dict_["param_file"], para_dict_["n_events_per_job"],
-            para_dict_["n_threads"], random_seed, para_dict_["bayes_file"],
-            para_dict_["event_start_id"])
-    else:
-        args_str = "{0} $(Process) {1} {2} {3}".format(
-            para_dict_["param_file"], para_dict_["n_events_per_job"],
-            para_dict_["n_threads"], random_seed, para_dict_["event_start_id"])
-    if seed_file:
-        args_str += " {}".format(seed_file)
-
-    script.write("""universe = vanilla
-executable = run_singularity.sh
-arguments = {}
-""".format(args_str))
-
-    script.write("""
-JobBatchName = {0}
-
-should_transfer_files = YES
-WhenToTransferOutput = ON_EXIT
-
-container_image = {1}
-Requirements = TARGET.HasSingularity && StringListIMember("stash", HasFileTransferPluginMethods)
-""".format(jobName, imagePathHeader + para_dict_["singularity_image_path"]))
-
-    input_files = [para_dict_['param_file']]
-    input_files += detect_eos_files(para_dict_['param_file'])
-    if para_dict_['bayesFlag']:
-        input_files.append(para_dict_['bayes_file'])
-    if seed_file:
-        input_files.append(seed_file)
-    script.write("\ntransfer_input_files = {}\n".format(", ".join(input_files)))
-
-    #script.write(
-    #    "transfer_checkpoint_files = job_output_$(Process).tar.gz\n")
-
-    transfer_output = build_transfer_output_tarball_name()
-
-    script.write("""
-transfer_output_files = {3}
-
-error = {4}/job.$(Cluster).$(Process).error
-output = {4}/job.$(Cluster).$(Process).output
-log = {4}/job.$(Cluster).$(Process).log
-
-#+JobDurationCategory = "Long"
-max_idle = 1000
-
-# Exit code 73 only means "at least one event was skipped" (an empty freeze-out
-# surface), NOT "this job's output is junk".  Removing such jobs here races the
-# output transfer: when the remove wins, all 20 events vanish silently and the
-# job leaves the queue with no results and no HoldReason.  That cost ~2% of the
-# first production batch and had to be found by comparing h5 files against
-# events_drawn.csv.  Let the job finish and transfer; per-event gaps are visible
-# as drawn-but-missing h5 files and are re-run individually.
-
-# auto release hold jobs if they are caused by data transfer issues on OSG
-periodic_release = ((HoldReasonCode == 13 || HoldReasonCode == 26) && (time() - EnteredCurrentStatus) > 1200 )
-
-
-# Send the job to Held state on failure.
-on_exit_hold = (ExitBySignal == True) || (ExitCode != 0 && ExitCode != 73)
-
-# The below are good base requirements for first testing jobs on OSG,
-# if you don't have a good idea of memory and disk usage.
-request_cpus = {0:d}
-request_memory = {1:d} GB
-request_disk = {5:d} GB
-
-# Queue one job with the above specifications.
-queue {2:d}""".format(para_dict_["n_threads"], para_dict_["memory_per_job"],
-                      para_dict_["n_jobs"], transfer_output, home_log_dir,
-                      para_dict_["disk_per_job"]))
-    script.close()
-
-
-def write_job_running_script_smash(para_dict_):
-    seed_file = None
-    if declared_seed_source(para_dict_["param_file"]) != "philox":
-        seed_file = detect_seed_file(para_dict_["param_file"])
-    # seedfile position: after bayesFile (if present), otherwise after seed ($5)
-    seedfile_pos = 7 if para_dict_["bayesFlag"] else 6
-
-    script = open("run_singularity.sh", "w")
-    script.write("""#!/usr/bin/env bash
-set -e
-
-parafile=$1
-processId=$2
-nHydroEvents=$3
-nthreads=$4
-nUrqmdSamples=__NURQMD_SAMPLES__
-seed=$5
-
-export PYTHONIOENCODING=utf-8
-export PATH="${PATH}:/usr/lib64/openmpi/bin:/usr/local/gsl/2.5/x86_64/bin"
-export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/usr/local/lib:/usr/local/gsl/2.5/x86_64/lib64"
-
-SCRATCH_DIR="${PWD}"
-cd "${SCRATCH_DIR}"
-
-jobdir=$(pwd)
-export JOBDIR="${jobdir}"
-export TMPDIR="${jobdir}/tmp"
-export HOME="${jobdir}"
-export XDG_DATA_HOME="${jobdir}/.local/share"
-export XDG_CACHE_HOME="${jobdir}/.cache"
-export TRENTO_CACHE="${jobdir}/.trento"
-
-export SINGULARITYENV_HOME="${HOME}"
-export SINGULARITYENV_TMPDIR="${TMPDIR}"
-export SINGULARITYENV_XDG_DATA_HOME="${XDG_DATA_HOME}"
-export SINGULARITYENV_XDG_CACHE_HOME="${XDG_CACHE_HOME}"
-export SINGULARITYENV_TRENTO_CACHE="${TRENTO_CACHE}"
-
-mkdir -p "${TMPDIR}"
-mkdir -p "${XDG_DATA_HOME}"
-mkdir -p "${XDG_CACHE_HOME}"
-mkdir -p "${TRENTO_CACHE}"
-mkdir -p "${XDG_DATA_HOME}/trento"
-
-touch "${TRENTO_CACHE}/write_test.txt" || { echo "Cannot write to TRENTO_CACHE"; exit 101; }
-touch "${XDG_DATA_HOME}/write_test.txt" || { echo "Cannot write to XDG_DATA_HOME"; exit 102; }
-touch "${TMPDIR}/write_test.txt" || { echo "Cannot write to TMPDIR"; exit 103; }
-
-printf "Start time: `/bin/date`\\n"
-printf "Job is running on node: `/bin/hostname`\\n"
-printf "system kernel: `uname -r`\\n"
-printf "Job running as user: `/usr/bin/id`\\n"
-printf "Working directory: ${SCRATCH_DIR}\\n"
-
-echo "==== Environment debug ===="
-echo "PWD=${PWD}"
-echo "HOME=${HOME}"
-echo "TMPDIR=${TMPDIR}"
-echo "XDG_DATA_HOME=${XDG_DATA_HOME}"
-echo "XDG_CACHE_HOME=${XDG_CACHE_HOME}"
-echo "TRENTO_CACHE=${TRENTO_CACHE}"
-echo "==========================="
-
-""".replace("__NURQMD_SAMPLES__", str(para_dict_["n_urqmd_per_hydro"])))
-
-    if para_dict_["bayesFlag"]:
-        script.write("bayesFile=$6\n")
-
-    if seed_file:
-        script.write("seedfile=${{{}}}\n".format(seedfile_pos))
-        script.write("mkdir -p shared_seeds\n")
-        script.write("seed_base=$(basename \"${seedfile}\")\n")
-        script.write("if [ -f \"${seed_base}\" ] && [ ! -f \"shared_seeds/${seed_base}\" ]; then cp \"${seed_base}\" \"shared_seeds/${seed_base}\"; fi\n")
-        script.write("if [ -f \"${seedfile}\" ] && [ ! -f \"shared_seeds/${seed_base}\" ]; then cp \"${seedfile}\" \"shared_seeds/${seed_base}\"; fi\n")
-        script.write("SEED_ARG=--isobar_seed_file\n")
-    else:
-        script.write("SEED_ARG=\"\"\n")
-
-    if para_dict_["bayesFlag"]:
-        script.write("""
-/opt/iEBE-MUSIC/generate_jobs.py -w playground -c OSG -par ${parafile} -id ${processId} -n_th ${nthreads} -n_urqmd ${nUrqmdSamples} -n_hydro ${nHydroEvents} -seed ${seed} -b ${bayesFile} --nocopy --continueFlag
-status=$?
-if [ $status -ne 0 ]; then
-    echo "generate_jobs.py failed with exit code ${status}" >&2
-    exit $status
-fi
-""")
-    else:
-        script.write("""
-/opt/iEBE-MUSIC/generate_jobs.py -w playground -c OSG -par ${parafile} -id ${processId} -n_th ${nthreads} -n_urqmd ${nUrqmdSamples} -n_hydro ${nHydroEvents} -seed ${seed} --nocopy --continueFlag
-status=$?
-if [ $status -ne 0 ]; then
-    echo "generate_jobs.py failed with exit code ${status}" >&2
-    exit $status
-fi
-""")
-
-    script.write("""
-if [ ! -d "${SCRATCH_DIR}/playground/event_0" ]; then
-    echo "Missing expected job directory: ${SCRATCH_DIR}/playground/event_0" >&2
-    ls -la "${SCRATCH_DIR}" >&2 || true
-    ls -la "${SCRATCH_DIR}/playground" >&2 || true
-    exit 1
-fi
-
-cd "${SCRATCH_DIR}/playground/event_0"
-if [ ! -f "submit_job.script" ]; then
-    echo "Missing submit_job.script in ${SCRATCH_DIR}/playground/event_0" >&2
-    ls -la >&2
-    exit 1
-fi
-
-archive_event_results() {
-    if [ -d "EVENT_RESULTS_${processId}" ] && [ ! -f "EVENT_RESULTS_${processId}.tar.gz" ]; then
-        tar -czf EVENT_RESULTS_${processId}.tar.gz EVENT_RESULTS_${processId}
-    elif [ ! -f "EVENT_RESULTS_${processId}.tar.gz" ]; then
-        tar -czf EVENT_RESULTS_${processId}.tar.gz --exclude="EVENT_RESULTS_${processId}.tar.gz" .
-    fi
-}
-
-trap archive_event_results EXIT
-
-bash submit_job.script
-status=$?
-if [ $status -ne 0 ]; then
-    echo "submit_job.script failed with exit code ${status}" >&2
-    exit $status
-fi
-status=$?
-if [ $status -ne 0 ]; then
-    exit $status
-fi
-""")
-    script.close()
-    chmod("run_singularity.sh", 0o755)
-
-
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def main(para_dict_):
     afterburner = detect_afterburner(para_dict_["param_file"])
     print("Detected afterburner: {}".format(afterburner))
 
-    if afterburner == "SMASH":
-        write_submission_script_smash(para_dict_)
-        write_job_running_script_smash(para_dict_)
-    else:
-        write_submission_script_urqmd(para_dict_)
-        write_job_running_script_urqmd(para_dict_)
+    write_submission_script_urqmd(para_dict_)
+    write_job_running_script_urqmd(para_dict_)
 
     logFolderName = "log"
     if not path.exists(logFolderName):

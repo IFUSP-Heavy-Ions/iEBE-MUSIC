@@ -200,8 +200,11 @@ defaults — prefer those over guessing flags.
   `EVENT_RESULTS_$(Process)` although the driver names results after the *global* event id. It now
   mirrors the OSG path (job *P* owns events `[P·N, P·N+N-1]`) and collects via an EXIT trap into
   `results_$(Process)/`. If you touch one generator, check whether the other needs the same change.
-- The OSG **SMASH** branch still hardcodes `event_0` (no event range is passed). The UrQMD branch —
-  which is what `afterburner_type: "decay"` uses — is correct. Avoid SMASH until that is fixed.
+- **The OSG generator has one code path for every afterburner (since 2026-11-25).** SMASH used
+  to have its own writers in `Cluster_supports/OSG/generate_submission_script.py`, an older copy
+  without the event range, the event list, the per-job archive or the campaign seed: every SMASH
+  job ran `event_0`. They are gone; SMASH uses the same writers as decay and UrQMD (the
+  `*_urqmd` names are historical), and the afterburner comes from the parameter file.
 - Root-level `collect_events.sh`, `combine_multiple_hdf5.py`, `average_event_spvn_h5.py` are
   gitignored because `generate_jobs.py` copies them into the CWD. Missing-from-git is not a bug.
 - `MakeDictionaries.py` defaults to a `./design` CSV that is **not in the repo** — supply your own.
