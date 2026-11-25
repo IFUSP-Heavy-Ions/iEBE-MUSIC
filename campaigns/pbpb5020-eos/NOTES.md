@@ -212,14 +212,35 @@ mode "curve"):
 It assumes 15 million drawn events below b_max (coverage 0.746). Below
 0.0006% every drawn event is simulated.
 
-Cost of the draws: 0.41-0.63 s per event on one OSG core, nearly all of it
-the hard-core nucleon sampler at A = 208. The 0.13 s first quoted was wall
-time with several processes. So 15M draws is about 7,500 CPU-hours, roughly
-3% of the campaign.
-- Run on OSG (2026-11-25): cluster 16215973, 1,500 blocks of 10,000 ids,
-  image iebe-music_full_d7a76b0_ce7aac59.sif.
-- The 2-block smoke test reproduced the local draws of ids 0-59 bit for bit
-  (b, npart, mult).
+Cost of the draws:
+- On one core, the hard-core nucleon sampler takes 184 ms per Pb nucleus
+  locally (0.4-0.6 s per event with two nuclei on OSG cores), against 6 ms
+  for TRENTo.
+- With two fresh nuclei per event, 15M draws would be about 7,500
+  CPU-hours. A first OSG run (cluster 16215973) was stopped and removed
+  before any block finished.
+
+At the user's request the campaign now reuses nuclei from a pool:
+- control_dict['nucleus_pool_size'] = 2^18. Event q 2^18 + r takes target
+  slot r and projectile slot (r + q) mod 2^18; TRENTo rotates every use at
+  random, seeded by the event id.
+- Draws: q < 58, ids [0, 15,204,352). event_selection.json is made for that
+  count.
+- 128 OSG jobs of 2048 slots (draw_events.py --pool-slots), about 130
+  CPU-hours.
+- Each configuration serves about 58 events. In 0-0.005% (585 events, 1170
+  nucleus slots out of 524,288) about one configuration appears twice, each
+  time with its own orientation and partner.
+
+Tested exactly, in the image, with M = 64:
+- With no pool the draws equal the earlier ones bit for bit.
+- Pooled ids below M equal the no-pool events.
+- Id-block and slot-mode draws agree.
+- The chain's run_trento.sh regenerates reused-nucleus events (70, 150,
+  and 127, which wraps around the pool) with identical b, npart, mult and
+  entropy.
+- The OSG smoke test of the id-block draws reproduced local draws bit for
+  bit.
 TRENTo is the same at every design point, so the draws, the calibration and
 the accepted list are made once and shared.
 
@@ -269,7 +290,7 @@ Budget: 51 runs x 40,740 events x about 7 min = about 240,000 CPU-hours.
 - [x] oversampling: iss_calls 1, N 10000 (4 samples central)
 - [x] importance-sampling allocation (N1 = 5000), event_selection.json
 - [x] design: 50 points (seed 1), design.csv
-- [ ] 15M draws (OSG cluster 16215973) and the shared selection list
+- [ ] pooled draws (15.2M ids, 128 OSG jobs) and the shared selection list
 - [x] dictionaries: /data/mluzum/pbpb5020_eos/dps (DesignPoint1-50, and
       DesignPoint51 = the lattice truth, DesignPoint1 with the lattice eos_dict)
 - pilot: dp 39 (softest, <c_s^2> 0.093 over 0.15-0.3 GeV), dp 19 (stiffest,

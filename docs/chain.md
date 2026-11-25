@@ -133,6 +133,16 @@ An event is `(MASTER_SEED = 8675309, seed_add = 0, event_id, iev)`:
 - the freeze-out seed is `np.random.default_rng([seed_add, event_id, iev])`;
 - batch *k* uses event ids `[k·2000, k·2000+1999]`, so a new batch adds *new*
   events at every design point.
+- **optional nucleus pool** (`control_dict['nucleus_pool_size'] = M`, since
+  2026-11-25; first used by pbpb5020-eos with M = 2^18): event `g = qM + r`
+  takes target slot `r` and projectile slot `(r + q) mod M`, and slot `s` is the
+  address `(2s + side)K` above. TRENTo rotates every use at random (seeded by
+  the event id). For `g < M` the events are the ones without a pool, and no
+  (target, projectile) pair repeats before `M^2` events. Without the key nothing
+  changes. It exists because fresh nuclei dominate the draws (A = 208 with a
+  hard core: 0.18-0.5 s per nucleus, against 6 ms per TRENTo event);
+  `draw_events.py --pool-slots R0 W --pool-q Q` samples each slot once for Q
+  events.
 
 This is the common-random-number design the whole emulator rests on. Changing any
 part of it silently invalidates comparisons with existing results.

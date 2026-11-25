@@ -286,7 +286,8 @@ fi""")
 
 
 ############## GENERATES SCRIPTS FOR TRENTo #######################
-def generate_script_trento(folder_name, nthreads, trento_output, event_id):
+def generate_script_trento(folder_name, nthreads, trento_output, event_id,
+                           nucleus_pool_size=None):
     """This function generates scripts for TRENTo simulation with Isobar-Sampler
     
     Args:
@@ -294,6 +295,9 @@ def generate_script_trento(folder_name, nthreads, trento_output, event_id):
         nthreads: number of threads
         trento_output: output filename for initial condition
         event_id: event index used only during folder generation
+        nucleus_pool_size: control_dict['nucleus_pool_size']; None (default)
+            gives every event two fresh nuclei and writes the same script as
+            before the option existed (see nucleus_slots below)
     """
 
     working_folder = folder_name
@@ -322,6 +326,28 @@ rm -fr nuclei_target nuclei_projectile
 export OMP_NUM_THREADS={0:d}
 """.format(nthreads))
 
+    if nucleus_pool_size:
+        pool = int(nucleus_pool_size)
+        if pool < 1:
+            raise ValueError("control_dict['nucleus_pool_size'] must be >= 1")
+        # A finite pool of M configurations per side, reused across events
+        # (TRENTo gives every use its own random 3D rotation, seeded by the
+        # event id).  Event g = q*M + r takes target slot r and projectile
+        # slot (r + q) mod M: the same addresses as without a pool for g < M,
+        # and no (target, projectile) pair repeats before M**2 events.
+        # scripts/draw_events.py --pool-slots uses the same mapping.
+        nucleus_slots = (
+            "nucleus_pool_size={0:d}\n"
+            "target_slot=$(( evid % nucleus_pool_size ))\n"
+            "projectile_slot=$(( (evid + evid / nucleus_pool_size) "
+            "% nucleus_pool_size ))\n"
+            "target_start=$(address_of $(( 2 * target_slot )))\n"
+            "projectile_start=$(address_of $(( 2 * projectile_slot + 1 )))\n"
+        ).format(pool)
+    else:
+        nucleus_slots = ("target_start=$(address_of $(( 2 * evid )))\n"
+                         "projectile_start=$(address_of $(( 2 * evid + 1 )))\n")
+
     trento_script = """
     # Run Isobar-Sampler ...
 
@@ -335,9 +361,7 @@ export OMP_NUM_THREADS={0:d}
 # spread evenly over the pool. The mapping depends only on `evid`: never on
 # any nuclear parameter, which is what keeps the design points synchronised.
 address_of() { echo $(( ($1 * 2654435761) & 0xFFFFFFFF )); }
-target_start=$(address_of $(( 2 * evid )))
-projectile_start=$(address_of $(( 2 * evid + 1 )))
-printf "%s %s\n" "$target_start" "$projectile_start" > "$results_folder/start_configuration.txt"
+@NUCLEUS_SLOTS@printf "%s %s\n" "$target_start" "$projectile_start" > "$results_folder/start_configuration.txt"
 
 TARGET_START=${target_start} PROJECTILE_START=${projectile_start} python3 - <<'PY'
 import os
@@ -433,7 +457,8 @@ PY
 mv __TRENTO_OUTPUT__ $results_folder/
  )
 """
-    script.write(trento_script.replace("__TRENTO_OUTPUT__", trento_output))
+    script.write(trento_script.replace("__TRENTO_OUTPUT__", trento_output)
+                 .replace("@NUCLEUS_SLOTS@", nucleus_slots))
     script.close()
 
 
@@ -1019,8 +1044,9 @@ def generate_event_folders(initial_condition_database, initial_condition_type,
         ############################## GENERATE FOLDER OF ISOBAR AND TRENTo ##########################
         elif "TRENTo" in initial_condition_type:
             trento_output = para_dict.trento_dict.get('output', 'test_path.dat')
-            generate_script_trento(event_folder, n_threads, trento_output,
-                                   event_id)
+            generate_script_trento(
+                event_folder, n_threads, trento_output, event_id,
+                para_dict.control_dict.get('nucleus_pool_size'))
             # Creation of Isobar and TRENTo event folders
             mkdir(path.join(event_folder, 'TRENTo'))
             mkdir(path.join(event_folder, 'TRENTo/Isobar-Sampler_target'))

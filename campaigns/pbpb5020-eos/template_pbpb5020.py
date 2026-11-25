@@ -16,6 +16,11 @@ with number_of_particles_needed 10000, i.e. about 4 oversamples in a central
 event and proportionally more in peripheral ones; y sampled over +-3.25 and
 every sum (standard output and HBT) over |y| < 2, where SMASH's End_Time of
 100 fm/c still contains the rescattering.
+
+Nuclei come from a pool of 2**18 configurations per side (nucleus_pool_size),
+each use rotated at random by TRENTo: event q*2**18 + r takes target slot r
+and projectile slot (r + q) mod 2**18. The 15.2M draws (q < 58) then cost
+about 130 CPU-hours instead of 7,500.
 """
 
 control_dict = {   'initial_state_type': 'TRENTo',
@@ -25,6 +30,7 @@ control_dict = {   'initial_state_type': 'TRENTo',
     'save_UrQMD_files': False,
     'deltaf_models': {'Grad': {'deltaf_model': 0, 'bulk_deltaf_kind': 20, 'RegVisYield': 1}},
     'iss_calls': 1,
+    'nucleus_pool_size': 262144,
     'hbt': {'y_cut': 2.0}}
 
 isobars_conf_dict_target = {   'isobar_samples': {   'description': 'Options for the isobar nucleon-position samples',

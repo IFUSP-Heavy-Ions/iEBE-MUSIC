@@ -188,6 +188,12 @@ defaults — prefer those over guessing flags.
   events in the same event folder reuse it. `run_trento.sh` rewrites that YAML per event via
   load-modify-dump, so the cache survives. Don't "clean up" the `_step_gaussian_cache` /
   `step_radius` keys — removing them silently costs ~2.4 s per invocation.
+- **A nucleus pool reuses configurations; the mapping is part of event identity.** With
+  `control_dict['nucleus_pool_size'] = M`, event `g = qM + r` uses target slot `r` and projectile
+  slot `(r + q) mod M` (`generate_jobs.py` writes it into `run_trento.sh`; `draw_events.py`
+  mirrors it). Changing M changes every event with `g >= M`, so a campaign's M is fixed once
+  events exist, like `MASTER_SEED`. Draw pooled campaigns with `--pool-slots`; an id-block draw
+  is correct but samples two nuclei per event, the cost the pool exists to avoid.
 - The committed `shared_seeds/nucleon-seeds.hdf` is 63 MB with shape `(10000, 300, 6)`.
   `isobar_samples.number_nucleons.value` must be **<= 300**: `build_isobars.py` truncates each seed
   row to `number_nucleons` and exits 1 if `A` exceeds the available entries. Shipped templates use

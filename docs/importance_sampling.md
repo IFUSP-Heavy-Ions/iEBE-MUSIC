@@ -47,7 +47,12 @@ python3 scripts/select_events.py --draws 'draws_dp0001_*.npz' \
 ```
 
 `draw_events.py` runs the events in batches (one sampler call and one TRENTo
-call per thousand events). They are the *same* events the chain later
+call per thousand events). With a nucleus pool (`control_dict['nucleus_pool_size']`,
+docs/chain.md, event identity) draw by slots instead, `--pool-slots R0 W
+--pool-q Q`: each slot is sampled once and used by Q events, which for A = 208
+cuts the cost per event from about 0.4 s to about 15 ms.
+`scripts/osg_draws.sh` is the OSG job (pbpb5020-eos: 128 jobs of 2048 slots,
+Q = 58). They are the *same* events the chain later
 regenerates one at a time from their ids: `tests/sampler_stride.sh` and
 `tests/trento_event_id_mode.sh` check that digit for digit, and have to be
 re-run for a new collision system or a new TRENTo (done for A = 96 and for
