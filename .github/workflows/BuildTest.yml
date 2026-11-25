@@ -32,9 +32,14 @@ jobs:
         # program_options and system). Both Dockerfiles install Boost already; only
         # this runner was missing it, which surfaced only once the build got past
         # the earlier MUSIC/Pythia8 failures.
+        # python3-numpy and python3-scipy: since the PDG2021+ hadron list (5a970cd),
+        # get_code_packages.sh builds iSS's hadron-gas table with
+        # iSS_code/utilities/make_hrg_eos.py, which imports both. The runner's
+        # system python3 has neither, so every push from 5a970cd on failed here
+        # with "No module named 'numpy'" while the container build passed.
         run: |
            sudo apt-get update
-           sudo apt-get install libfftw3-dev hdf5-tools libhdf5-dev libgsl-dev libeigen3-dev libboost-all-dev
+           sudo apt-get install libfftw3-dev hdf5-tools libhdf5-dev libgsl-dev libeigen3-dev libboost-all-dev python3-numpy python3-scipy
       - name: Build the iEBE-MUSIC framework
         # get_code_packages.sh clones every code at a pinned commit and is what
         # both Dockerfiles run, so this test validates the build the container
