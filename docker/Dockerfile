@@ -165,13 +165,16 @@ ENV HOME /opt/
 #              MakeDictionaries takes the nucleon correlation from the
 #              template; the driver stops on a MUSIC grid / IC table
 #              mismatch; existing runs unchanged)
+#   d7a76b0 = "pbpb5020-eos: 4 samples per central event, |y| < 2 window ..."
+#             (control_dict['iss_calls'], default 10: existing runs
+#              unchanged; push tooling; Build Test numpy/scipy)
 RUN cd ${HOME} && \
     mkdir iEBE-MUSIC && cd iEBE-MUSIC && \
     git init -q . && \
     git remote add origin https://github.com/IFUSP-Heavy-Ions/iEBE-MUSIC.git && \
-    git fetch -q --depth=1 origin 8a0b633fe151069c3f33ea057b81a45af8443d7b && \
+    git fetch -q --depth=1 origin d7a76b0c7c68a6f7ffb47a93d2ceb9ffaafd67d1 && \
     git checkout -q FETCH_HEAD && \
-    test "$(git rev-parse HEAD)" = "8a0b633fe151069c3f33ea057b81a45af8443d7b" && \
+    test "$(git rev-parse HEAD)" = "d7a76b0c7c68a6f7ffb47a93d2ceb9ffaafd67d1" && \
     cd codes && \
     bash get_code_packages.sh && \
     ./compile_code_packages.sh && \
