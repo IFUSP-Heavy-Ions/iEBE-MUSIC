@@ -63,9 +63,10 @@ control_dict = {
     # predicts the freeze-out size, and TRENTo reruns on the chosen box. A
     # MUSIC run whose freeze-out reaches the edge is redone in a larger box.
     # The rule comes from config/adaptive_grid.json unless
-    # 'adaptive_grid_coeffs' gives a campaign's own (c0..c5, S_ref,
-    # stiffness_T_GeV, sigma, k_tail, n_sigma, max_half_width, retry_growth,
-    # max_retries).
+    # 'adaptive_grid_coeffs' gives a campaign's own: either c0..c4, sigma,
+    # k_tail, n_sigma, or {"rule": "lnmult", ...} with one (a, b, sigma) per
+    # EoS table (plan_lnmult_half_width); both take max_half_width,
+    # min_half_width, retry_growth, max_retries.
     'adaptive_grid': False,
     'adaptive_grid_coeffs': None,
     'EOSType': 0,

@@ -523,14 +523,11 @@ def plan_adaptive_half_width(R_rms_trento,
                              coeffs,
                              grid_step,
                              current_grid_max,
-                             fixed_cells=0,
-                             eos_stiffness=None):
+                             fixed_cells=0):
     """Half-width the box needs, in fm, or None to leave the box alone.
 
-    With "c5" in `coeffs` the prediction gains c5*(S - S_ref), S being
-    `eos_stiffness` (the mean c_s^2 of the run's EoS table over
-    coeffs["stiffness_T_GeV"], see eos_mean_cs2): a stiffer EoS expands
-    further. Without "c5" the rule is the one fitted on Zr at a fixed EoS.
+    The rule fitted on Zr at a fixed EoS (see plan_lnmult_half_width for
+    the one used when the EoS varies).
 
     Two schemes, selected by `fixed_cells`:
 
@@ -546,8 +543,6 @@ def plan_adaptive_half_width(R_rms_trento,
     r_rms = (coeffs["c0"] + coeffs["c1"]*R_rms_trento
              + coeffs["c2"]*math.log(e_fo)
              + coeffs["c3"]*math.log(normalization) + coeffs["c4"]*tau)
-    if "c5" in coeffs and eos_stiffness is not None:
-        r_rms += coeffs["c5"]*(eos_stiffness - coeffs.get("S_ref", 0.0))
     need = coeffs["k_tail"]*(r_rms + coeffs["n_sigma"]*coeffs["sigma"])
     if fixed_cells and fixed_cells > 0:
         n_cells = int(fixed_cells)
@@ -610,20 +605,69 @@ def reset_grid_to_nominal(para_dict):
     return nominal
 
 
-def eos_mean_cs2(t_range):
-    """Mean c_s^2 over T in `t_range` (GeV), uniform in T, of the EoS table
-    MUSIC runs with (MUSIC's EOS_table_file, columns e, T, P, c_s^2, s), or
-    None without such a table."""
+def ic_quantile_radius(e_flat, grid_max, quantile):
+    """Radius (fm) about the grid centre that holds `quantile` of a square
+    gridded density, or None."""
+    n = int(round(math.sqrt(e_flat.size)))
+    total = e_flat.sum()
+    if n*n != e_flat.size or total <= 0:
+        return None
+    step = (2.0*grid_max)/n
+    x = np.linspace(-grid_max + step/2.0, grid_max - step/2.0, n)
+    X, Y = np.meshgrid(x, x, indexing='xy')
+    r = np.hypot(X, Y).ravel()
+    order = np.argsort(r)
+    cum = np.cumsum(e_flat[order])/total
+    idx = min(int(np.searchsorted(cum, quantile)), r.size - 1)
+    return float(r[order][idx])
+
+
+def eos_table_key():
+    """Identity of the EoS table MUSIC runs with: the first 16 hex digits of
+    the header's inputs_sha256 (codes/eos_builder), or None without one."""
     music_input = path.join("MUSIC", "music_input_mode_2")
     name = read_input_value(music_input, "EOS_table_file")
     if not name:
         return None
-    table = path.join("MUSIC", name)
-    if not path.exists(table):
+    try:
+        with open(path.join("MUSIC", name), "r", encoding="utf-8") as f:
+            header = json.loads(f.readline().split(None, 1)[1])
+        return str(header["meta"]["inputs_sha256"])[:16]
+    except (OSError, ValueError, KeyError, IndexError, TypeError):
         return None
-    d = np.loadtxt(table, skiprows=1, usecols=(1, 3))
-    t_grid = np.linspace(float(t_range[0]), float(t_range[1]), 400)
-    return float(np.mean(np.interp(t_grid, d[:, 0], d[:, 1])))
+
+
+def plan_lnmult_half_width(mult, r_quantile, coeffs, eos_key):
+    """Half-width (fm) of the box for the "lnmult" rule, and whether the
+    run's EoS has its own entry.
+
+    The largest |x|, |y| the freeze-out surface reaches grows linearly in
+    ln(mult) at a slope and intercept that depend on the EoS, and never
+    falls below the extent of the initial condition:
+
+        need = max(r_quantile + floor_offset, a + b ln(mult) + n_sigma sigma)
+        half = need + pad
+
+    (a, b, sigma) come from coeffs["by_eos"][eos_key], measured per EoS
+    table, else from coeffs["default"]. mult is TRENTo's (the grid sum times
+    the cell area); r_quantile holds coeffs["floor_quantile"] of the TRENTo
+    profile. How well a mean c_s^2 predicts the extent was tried first and
+    is poor (3 fm), since stiffness at high and low T act in opposite
+    directions; hence the table.
+    """
+    entry = (coeffs.get("by_eos") or {}).get(eos_key)
+    known = entry is not None
+    if not known:
+        if "default" not in coeffs:
+            raise ValueError("adaptive grid: no entry for EoS {} and no "
+                             "\"default\" in the coefficients".format(eos_key))
+        entry = coeffs["default"]
+    a, b, sigma = (float(v) for v in entry)
+    need = a + b*math.log(max(mult, 1e-30)) + float(
+        coeffs.get("n_sigma", 0.0))*sigma
+    if r_quantile is not None:
+        need = max(need, r_quantile + float(coeffs.get("floor_offset", 0.0)))
+    return need + float(coeffs.get("pad", 0.0)), known
 
 
 def apply_adaptive_grid(res_path, file_name, para_dict, grid_step):
@@ -653,28 +697,34 @@ def apply_adaptive_grid(res_path, file_name, para_dict, grid_step):
     tau = float(para_dict.get("free_stream_tau", 1.0))
 
     coeffs = read_adaptive_coeffs()
-    stiffness = None
-    if "c5" in coeffs:
-        stiffness = eos_mean_cs2(coeffs.get("stiffness_T_GeV", (0.15, 0.30)))
-        if stiffness is None:
-            raise ValueError("adaptive grid: coefficients have an EoS term "
-                             "(c5) but MUSIC has no EOS_table_file")
     fixed_cells = 0
-    for _k in ("adaptive_fixed_cells", "fixed_cells"):
-        try:
-            _v = read_input_value(trento_input, _k)
-            if _v is None:
-                _v = read_input_value(music_input, _k)
-            if _v is not None:
-                fixed_cells = int(float(_v))
-                break
-        except (TypeError, ValueError):
-            pass
-    L, n_cells, r_rms, dx_used = plan_adaptive_half_width(
-        R_rms, t_freeze, normalization, tau, coeffs, grid_step, trento_grid_max,
-        fixed_cells, eos_stiffness=stiffness)
+    r_rms = R_rms
+    if coeffs.get("rule") == "lnmult":
+        eos_key = eos_table_key()
+        flat = trento_matrix.ravel()
+        L, known = plan_lnmult_half_width(
+            float(flat.sum())*grid_step**2,
+            ic_quantile_radius(flat, trento_grid_max,
+                               float(coeffs.get("floor_quantile", 0.999))),
+            coeffs, eos_key)
+        n_cells, dx_used = 2*int(math.ceil(L/grid_step - 1e-9)), grid_step
+        para_dict['grid_rule'] = "eos:{}".format(
+            eos_key) if known else "default"
+    else:
+        for _k in ("adaptive_fixed_cells", "fixed_cells"):
+            try:
+                _v = read_input_value(trento_input, _k)
+                if _v is None:
+                    _v = read_input_value(music_input, _k)
+                if _v is not None:
+                    fixed_cells = int(float(_v))
+                    break
+            except (TypeError, ValueError):
+                pass
+        L, n_cells, r_rms, dx_used = plan_adaptive_half_width(
+            R_rms, t_freeze, normalization, tau, coeffs, grid_step,
+            trento_grid_max, fixed_cells)
     para_dict['grid_box_predicted'] = L
-    para_dict['grid_eos_stiffness'] = stiffness
 
     max_half = coeffs.get("max_half_width")
     floor = para_dict.get('grid_floor_half_width')
@@ -682,6 +732,8 @@ def apply_adaptive_grid(res_path, file_name, para_dict, grid_step):
         L = max(L, float(floor))
     if max_half is not None:
         L = min(L, float(max_half))
+    if coeffs.get("min_half_width") is not None:
+        L = max(L, float(coeffs["min_half_width"]))
     if not fixed_cells:
         n_cells = 2*int(math.ceil(L/grid_step - 1e-9))
         L = n_cells*grid_step/2.0
@@ -693,13 +745,13 @@ def apply_adaptive_grid(res_path, file_name, para_dict, grid_step):
         para_dict['grid_box_used'] = trento_grid_max
         return None
 
-    print(
-        "\U0001F9FE  adaptive grid: TRENTo R_rms={:.2f}{} -> r_rms_pred={:.2f} -> "
-        "+-{:.1f} fm, {} cells, dx={:.3f} (was +-{:.1f}, {}, dx={:.3f})"
-        .format(R_rms, "" if stiffness is None else
-                ", <c_s^2>={:.3f}".format(stiffness), r_rms, L, n_cells,
-                dx_used, trento_grid_max, current_cells, grid_step),
-        flush=True)
+    print("\U0001F9FE  adaptive grid: TRENTo R_rms={:.2f}, {} -> +-{:.1f} fm, "
+          "{} cells, dx={:.3f} (was +-{:.1f}, {}, dx={:.3f})".format(
+              R_rms, "rule {}".format(para_dict['grid_rule'])
+              if coeffs.get("rule") == "lnmult" else
+              "r_rms_pred={:.2f}".format(r_rms), L, n_cells, dx_used,
+              trento_grid_max, current_cells, grid_step),
+          flush=True)
     # TRENTo makes ceil(2 grid-max/step) cells, which rounding can push one
     # cell over (e.g. 10.8 fm at 0.15); half a cell less always gives n_cells,
     # and TRENTo then centres them at exactly n_cells*step/2.
@@ -1550,6 +1602,7 @@ def write_grid_extent_diagnostic(final_results_folder,
                 if rms is not None:
                     row['R_rms_trento'] = rms
                     row['trento_grid_max'] = L
+                    row['R999_trento'] = ic_quantile_radius(flat, L, 0.999)
     except (OSError, ValueError):
         pass
 
@@ -2336,7 +2389,7 @@ def main(para_dict_):
                 music_seconds=time.time() - t_hydro_start,
                 extra={k: para_dict_.get(k) for k in (
                     'grid_box_predicted', 'grid_box_used', 'grid_attempts',
-                    'grid_eos_stiffness') if para_dict_.get('adaptive_grid')})
+                    'grid_rule') if para_dict_.get('adaptive_grid')})
         except Exception:
             import traceback
             print('grid extent diagnostic failed:\n{}'.format(
