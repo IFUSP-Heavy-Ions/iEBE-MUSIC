@@ -184,11 +184,26 @@ echo -e "${Green}compile SMASH ... ${NC}"
 (
 cd smash_code
 rm -fr build
+# SMASH adds -march=native unconditionally, with no option to turn it off, in
+# its own CMakeLists.txt and in those of the bundled Cuba and einhard, so the
+# binary carries whatever the build host supports. Built on a Zen 2 host it
+# held ~94k VEX (AVX2/FMA/BMI2) instructions and died with "Illegal
+# instruction" on x86-64-v2 workers, ~9% of OSPool slots (7 of 30 jobs of the
+# 2026-11-25 pbpb5020-eos pilot). Build it for the baseline like every other
+# code here (0 VEX instructions), and refuse to go on if a SMASH update brings
+# the flag back some other way.
+grep -rl --include=CMakeLists.txt -e '"-march=native"' . \
+    | xargs -r sed -i 's/"-march=native"//'
 mkdir -p build && cd build
 CC=${CCFlag} CXX=${CXXFlag} cmake \
         -DPythia_CONFIG_EXECUTABLE="${HOME}/pythia8315/bin/pythia8-config" \
         -DTRY_USE_HEPMC=OFF \
         ..
+if grep -rq --include=flags.make -e "-march=native" .; then
+    echo "SMASH would still be built with -march=native:" >&2
+    grep -rl --include=flags.make -e "-march=native" . >&2
+    exit 1
+fi
     make -j${number_of_cores_to_compile} smash
 )
 status=$?
@@ -225,3 +240,27 @@ cp hadronic_afterburner_toolkit_code/convert_to_binary.e hadronic_afterburner_to
 cp hadronic_afterburner_toolkit_code/concatenate_binary_files.e hadronic_afterburner_toolkit/
 cp hadronic_afterburner_toolkit_code/parameters.dat hadronic_afterburner_toolkit/
 cp hadronic_afterburner_toolkit_code/ebe_scripts/average_event_HBT_correlation_function.py hadronic_afterburner_toolkit/
+
+# Every binary has to run on any x86-64 worker, and OSPool still has
+# x86-64-v2 slots (no AVX2). A VEX-encoded (AVX) instruction means a build
+# picked up the build host's instruction set, as SMASH's -march=native did
+# (2026-11-25: "Illegal instruction" on 7 of 30 pilot jobs).
+if command -v objdump >/dev/null 2>&1 && command -v file >/dev/null 2>&1; then
+    vex_bad=0
+    while IFS= read -r -d '' f; do
+        file -b "$f" | grep -q '^ELF' || continue
+        n=$(objdump -d --no-show-raw-insn "$f" 2>/dev/null \
+            | grep -cE '^\s+[0-9a-f]+:\s+v[a-z0-9]+\s')
+        if [ "$n" -gt 0 ]; then
+            echo "not portable: $f has $n VEX (AVX) instructions" >&2
+            vex_bad=1
+        fi
+    done < <(find . \( -name CMakeFiles -o -name .git \) -prune -o -type f \
+                \( -perm -u+x -o -name '*.so' -o -name '*.so.*' \) -print0)
+    if [ $vex_bad -ne 0 ]; then
+        exit 1
+    fi
+    echo -e "${Green}instruction-set check: no AVX in any binary${NC}"
+else
+    echo "objdump or file missing: skipping the instruction-set check" >&2
+fi

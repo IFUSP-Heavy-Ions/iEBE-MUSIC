@@ -140,6 +140,16 @@ defaults — prefer those over guessing flags.
   rebuild takes the compiler of the day: 17 days after the zr96-c2 image the same recipe produced
   different binaries (the reference events still agreed bit for bit, but that is luck, not a
   guarantee).
+- **Every binary must run on any x86-64 worker; nothing may be built with `-march=native`.**
+  OSPool still has x86-64-v2 slots (no AVX2, ~9% in 2026-11). SMASH adds `-march=native`
+  unconditionally, in its own CMakeLists.txt and in the bundled Cuba and einhard, so images up
+  to `ca8b92d` carried a SMASH with ~94k AVX2/FMA instructions from the Zen 2 build host. It
+  died with "Illegal instruction" on 7 of the 30 pbpb5020-eos pilot jobs (Clemson-Palmetto,
+  Utah-Kingspeak, Hawaii-Koa), while MUSIC ran fine on the same nodes. The SMASH output of those
+  images is valid where it ran; only portability was lost. `compile_code_packages.sh` strips the
+  flag and ends by scanning every built ELF file for VEX instructions; it fails the build if
+  it finds one. To run an old image on OSG anyway, add
+  `(TARGET.Microarch =?= "x86_64-v3" || TARGET.Microarch =?= "x86_64-v4")` to Requirements.
 - **Reproducibility is assumed, not demonstrated.** The seed scheme is counter-based and the
   container pins the framework to an exact SHA, but nobody has yet run the same event twice on
   local HTCondor and once on OSG and diffed the nucleus HDF5. The common-random-numbers design
