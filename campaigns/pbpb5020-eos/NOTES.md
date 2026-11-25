@@ -184,9 +184,64 @@ Bin edges, in sigma above the knee:
 
 These are for TRENTo's own multiplicity. A final-state, finite-resolution
 estimator such as V0M makes the experimental bins less extreme, so the
-selection density should be smooth, with no cliffs at bin edges. The
-allocation (density of simulated events per percent of centrality) is to
-be decided; see scratchpad knee/alloc.py.
+selection density should be smooth, with no cliffs at bin edges.
+
+## Importance sampling (user's decision, 2026-11-25)
+
+Targets:
+- equal statistics in each 1% bin of 0-5%, for v_n{4};
+- the ALICE v_n{2} nested bins 0-0.005, 0-0.02, 0-0.2, 0-1, 0-2.5 and 2.5-5%,
+  with fewer events in the narrowest;
+- coverage between the knee and 0.005% for the <pT> slope;
+- wider bins beyond 5%.
+
+Density of simulated events per percent of centrality (`make_selection.py`,
+mode "curve"):
+- 1-5%: N1 = 5000 per 1% bin (the user's choice);
+- below 1%: N1 (c/1%)^-1/2;
+- 5-60%: 1500 per wide bin;
+- beyond 60%: 10 per percent;
+- geometric tapers over 5-6%, 10-11% and 60-65%.
+
+It assumes 15 million drawn events below b_max (coverage 0.746), about
+550 CPU-hours at 0.13 s each. Below 0.0006% every drawn event is simulated.
+TRENTo is the same at every design point, so the draws, the calibration and
+the accepted list are made once and shared.
+
+| bin | events | effective (weights) |
+|---|---|---|
+| 0-0.005% | 583 | 520 |
+| 0-0.02% | 1,292 | 1,060 |
+| 0-0.2% | 4,357 | 3,362 |
+| 0-1% | 9,896 | 7,516 |
+| 0-2.5% | 17,395 | 14,431 |
+| 2.5-5% | 12,500 | 12,500 |
+| each of 1-2, ..., 4-5% | 5,000 | 5,000 |
+| 0.005-0.57% (knee region) | 6,859 | 5,581 |
+| 5-10% | 2,917 | 1,734 |
+| each of 10-20, ..., 50-60% | about 1,500 | about 1,500 |
+| 60-100% | 615 | 436 |
+| total | 40,740 | |
+
+## Design (2026-11-25)
+
+There are 50 training points and no held-out validation set. That was the
+user's decision, because simulation compute is the bottleneck. The emulator
+is validated by leave-one-out and leave-a-block-out cross-validation.
+- `design.csv` is a maximin Latin hypercube in Gaussian-quantile space of
+  the 4 KL coordinates (alpha 0.01, so |z_k| <= 2.33):
+  `make_eos_design.py --n 50 --seed 1 --iters 60000`.
+- Seeds 1-10 are all equivalent (median gap from a prior draw to its nearest
+  point 0.233 in u). Seed 1 has the smallest worst-case gap (0.472).
+- The lattice truth runs once more on the same events, for the closure test.
+  It is not a training point.
+  - Lattice z = (-0.80, 0.49, 0.40, 0.85), |z| = 1.32.
+  - Its nearest design point is 0.243 away in u, a typical gap, so the
+    closure test is not flattered by a neighbour.
+  - 4 modes miss the lattice c_s^2 by at most 0.027 above T_sw (at the
+    150 MeV dip); the larger miss below T_sw never enters the hydro.
+
+Budget: 51 runs x 40,740 events x about 7 min = about 240,000 CPU-hours.
 
 ## Status
 
@@ -197,5 +252,7 @@ be decided; see scratchpad knee/alloc.py.
 - [x] SMASH sampled-rapidity scan; timing, grid extent
 - [x] SMASH End_Time (100 fm/c) vs the forward rapidities: window |y| < 2, range +-3.25
 - [x] oversampling: iss_calls 1, N 10000 (4 samples central)
-- [ ] importance-sampling allocation (user), draws (~10-15M), selection file
-- [ ] design generator, importance-sampling bins, OSG pilot
+- [x] importance-sampling allocation (N1 = 5000), event_selection.json
+- [x] design: 50 points (seed 1), design.csv
+- [ ] 15M draws and the shared selection list
+- [ ] OSG pilot: SIF from d7a76b0, a few design points
