@@ -171,13 +171,16 @@ ENV HOME /opt/
 #   ca8b92d = "Optional nucleus pool: reuse nucleus configurations across events"
 #             (control_dict['nucleus_pool_size'], off by default: existing
 #              runs unchanged; one OSG generator path for every afterburner)
+#   3977465 = "Build SMASH for the baseline x86-64, and check every binary for AVX"
+#             (SMASH without -march=native: runs on x86-64-v2 workers; its
+#              output changes in the last bits, every other code identical)
 RUN cd ${HOME} && \
     mkdir iEBE-MUSIC && cd iEBE-MUSIC && \
     git init -q . && \
     git remote add origin https://github.com/IFUSP-Heavy-Ions/iEBE-MUSIC.git && \
-    git fetch -q --depth=1 origin ca8b92d7018daf65e0e6e888c63069ad79a327c3 && \
+    git fetch -q --depth=1 origin 397746591d59bf0e664bfd79d79e889de902a5a8 && \
     git checkout -q FETCH_HEAD && \
-    test "$(git rev-parse HEAD)" = "ca8b92d7018daf65e0e6e888c63069ad79a327c3" && \
+    test "$(git rev-parse HEAD)" = "397746591d59bf0e664bfd79d79e889de902a5a8" && \
     cd codes && \
     bash get_code_packages.sh && \
     ./compile_code_packages.sh && \
