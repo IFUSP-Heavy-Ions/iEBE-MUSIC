@@ -56,7 +56,8 @@ def uniform(master_seed, event_id):
     return float(np.random.Generator(bit_gen).random())
 
 
-def calibrate(estimators, coverage=1.0, n_knots=2001):
+def calibrate(estimators, coverage=1.0, n_knots=2001, top_events=10,
+              top_fraction=0.01, knots_per_decade=50):
     """Estimator-to-centrality table from a minimum-bias sample.
 
     `estimators` holds one value per *drawn* event; events that did not collide
@@ -65,6 +66,18 @@ def calibrate(estimators, coverage=1.0, n_knots=2001):
     section the drawn sample covers: 1 unless the impact parameter was cut
     below the range where collisions still happen, in which case the most
     peripheral event of the sample sits at 100*coverage percent, not 100.
+
+    The knots are `n_knots` evenly spaced fractions plus geometrically spaced
+    ones (`knots_per_decade`) from the fraction holding the `top_events` most
+    central events up to `top_fraction` of the sample.  Without the geometric part
+    the first segment spans 100*coverage/(n_knots - 1) percent (0.037% for
+    2001 knots at coverage 0.746), and since the top of the estimator
+    distribution is a thin tail, linear interpolation inside it put almost
+    every event near the segment's far end: on 15M Pb-Pb draws, 2 events fell
+    in 0-0.005% instead of 1019, and the ultra-central bins of a selection
+    were starved by the same factor.  The geometric knots continue to
+    `top_fraction` because the tail's curvature still costs a few percent of
+    centrality per segment up to about 0.2%.
 
     Returns {"percent": [...], "estimator": [...]}: the estimator value at
     each centrality percentile, most central first (estimator decreasing).
@@ -75,6 +88,10 @@ def calibrate(estimators, coverage=1.0, n_knots=2001):
         raise ValueError("calibration needs at least two collided events")
     frac = (np.arange(len(x)) + 0.5) / len(x)  # 0 = most central
     knots = np.linspace(0.0, 1.0, n_knots)
+    f0, f1 = top_events / len(x), max(top_fraction, knots[1])
+    if knots_per_decade > 0 and f0 < f1:
+        n_log = int(np.ceil(knots_per_decade * np.log10(f1 / f0)))
+        knots = np.unique(np.concatenate([knots, np.geomspace(f0, f1, n_log + 1)]))
     values = np.interp(knots, frac, x)
     return {
         "percent": (100.0 * coverage * knots).tolist(),

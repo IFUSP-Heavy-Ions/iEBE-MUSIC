@@ -292,7 +292,13 @@ Budget: 51 runs x 40,740 events x about 7 min = about 240,000 CPU-hours.
 - [x] design: 50 points (seed 1), design.csv
 - [x] image iebe-music_full_ca8b92d_0783f574.sif (md5 0783f574...), published on OSDF;
       reference runs bit-identical to d7a76b0, Pb-Pb pool template = timing runs
-- [ ] pooled draws (15.2M ids, 128 OSG jobs) and the shared selection list
+- [x] pooled draws: 15,204,352 ids, 128 OSG jobs (cluster 16216036), 0.84 h mean,
+      2.0 h max, 293 MB max; /data/mluzum/pbpb5020_eos/draws_pool
+- [x] shared selection list: 40,723 events, every bin within Poisson of the
+      allocation table; /data/mluzum/pbpb5020_eos/selection_v2/sel.{csv,json,npz}.
+      The first attempt (selection/) starved 0-0.2% (2 events in 0-0.005%
+      instead of 585): the calibration table had no knots below 0.037%.
+      Fixed in codes/event_selection.py (geometric knots in the top 1%).
 - [x] dictionaries: /data/mluzum/pbpb5020_eos/dps (DesignPoint1-50, and
       DesignPoint51 = the lattice truth, DesignPoint1 with the lattice eos_dict)
 - pilot: dp 39 (softest, <c_s^2> 0.093 over 0.15-0.3 GeV), dp 19 (stiffest,

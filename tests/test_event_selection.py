@@ -31,6 +31,11 @@ c = es.centrality(est, table)
 coll = est > 0
 assert abs(np.mean(c[coll] < 1.0) - 0.01) < 5e-4 and abs(np.mean(c[coll] < 50) - 0.5) < 2e-3
 assert np.all(c[~coll] == 100.0)
+# 3b. ... also at the very top, where the estimator is a thin tail (2001 even
+# knots alone put 0 of the ~38 events of 0-0.01% there)
+for top in (0.001, 0.01, 0.1):
+    want = top / 100 * coll.sum()
+    assert abs(np.sum(c[coll] < top) - want) <= 2 + 0.01 * want, (top, np.sum(c[coll] < top), want)
 
 # 4. "bins" gives about equal accepted counts per bin, and unbiased averages
 cfg = {"mode": "bins", "centrality_bins": [0, 0.2, 1, 2, 5, 10, 20, 40, 70],

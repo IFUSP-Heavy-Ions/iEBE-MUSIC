@@ -69,6 +69,16 @@ point's own draws, applies the selection, and writes
 
 The full minimum-bias record is not kept; it regenerates from the event ids.
 
+The table's knots are 2001 even percentiles plus geometric ones over the most
+central 1% of the sample, down to its 10th event. The geometric part matters
+whenever bins narrower than about 0.05% are used: with even knots alone the
+first segment spans 0.037% (coverage 0.746), the estimator's top tail is thin,
+and linear interpolation in it put 2 of the 1019 events of 0-0.005% there on
+15M Pb-Pb draws. Weights stayed correct, but the ultra-central bins got 1/300
+of their events. A table from before this change (2026-11-25) has no
+geometric knots; check the first entries of `calibration_percent` before
+freezing one.
+
 By default the centrality table is recomputed from whatever draws are given.
 To add events to a design point later without changing any earlier decision,
 freeze it: `select_events.py --calibration selection_dp0001.npz` reuses the
