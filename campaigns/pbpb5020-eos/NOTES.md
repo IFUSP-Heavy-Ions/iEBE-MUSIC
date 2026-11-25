@@ -132,6 +132,12 @@ time steps (Time_Step_Mode None). Ratios 400/100, 0.5-unit bins of |y|:
 
 That matches tau cosh eta_s = 100 fm/c: rescattering up to tau = 26 fm is
 contained at |eta_s| < 2.
+
+A third run kept the fixed 0.1 fm/c steps and moved only End_Time to 400:
+- |y| < 2: again nothing beyond noise (proton <pT> ratios 0.99-1.01, pions
+  within 1%).
+- 2 < |y| < 3.5: p, pbar and Lambda <pT> are 8-12% higher, kaons 3-5%.
+So the effect is the end time, not the time-step mode.
 - End_Time 400 with fixed steps costs about 12 min per sample, against
   0.5 min at 100, so it is out.
 - Time_Step_Mode None at 400 fm/c costs about 1.8 times the default per sample.
