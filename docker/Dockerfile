@@ -168,13 +168,16 @@ ENV HOME /opt/
 #   d7a76b0 = "pbpb5020-eos: 4 samples per central event, |y| < 2 window ..."
 #             (control_dict['iss_calls'], default 10: existing runs
 #              unchanged; push tooling; Build Test numpy/scipy)
+#   ca8b92d = "Optional nucleus pool: reuse nucleus configurations across events"
+#             (control_dict['nucleus_pool_size'], off by default: existing
+#              runs unchanged; one OSG generator path for every afterburner)
 RUN cd ${HOME} && \
     mkdir iEBE-MUSIC && cd iEBE-MUSIC && \
     git init -q . && \
     git remote add origin https://github.com/IFUSP-Heavy-Ions/iEBE-MUSIC.git && \
-    git fetch -q --depth=1 origin d7a76b0c7c68a6f7ffb47a93d2ceb9ffaafd67d1 && \
+    git fetch -q --depth=1 origin ca8b92d7018daf65e0e6e888c63069ad79a327c3 && \
     git checkout -q FETCH_HEAD && \
-    test "$(git rev-parse HEAD)" = "d7a76b0c7c68a6f7ffb47a93d2ceb9ffaafd67d1" && \
+    test "$(git rev-parse HEAD)" = "ca8b92d7018daf65e0e6e888c63069ad79a327c3" && \
     cd codes && \
     bash get_code_packages.sh && \
     ./compile_code_packages.sh && \
