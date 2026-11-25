@@ -257,7 +257,10 @@ should_transfer_files = YES
 WhenToTransferOutput = ON_EXIT
 
 container_image = {1}
-Requirements = TARGET.HasSingularity && StringListIMember("stash", HasFileTransferPluginMethods)
+# The image is AlmaLinux 9, whose glibc refuses to start below x86-64-v2, so keep
+# off the few x86_64-v1 slots. Our own binaries need only the baseline (since
+# 3977465 SMASH too; before it, images need x86_64-v3, see AGENTS.md).
+Requirements = TARGET.HasSingularity && StringListIMember("stash", HasFileTransferPluginMethods) && (TARGET.Microarch =!= "x86_64-v1")
 """.format(jobName, singularity_image_url))
 
     input_files = [para_dict_['param_file']]
