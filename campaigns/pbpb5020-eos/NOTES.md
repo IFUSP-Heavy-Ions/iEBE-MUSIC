@@ -292,6 +292,11 @@ Budget: 51 runs x 40,740 events x about 7 min = about 240,000 CPU-hours.
 - [x] design: 50 points (seed 1), design.csv
 - [x] image iebe-music_full_ca8b92d_0783f574.sif (md5 0783f574...), published on OSDF;
       reference runs bit-identical to d7a76b0, Pb-Pb pool template = timing runs
+- [x] production image iebe-music_full_3977465_de36b20a.sif (md5 de36b20a...),
+      published on OSDF: SMASH without -march=native. The ca8b92d SMASH died
+      with SIGILL on x86-64-v2 workers (7 of the 30 pilot jobs); non-SMASH
+      reference runs bit-identical to ca8b92d, SMASH runs identical up to
+      ~1e-9 relative in a few Pb-Pb entries, so pilot output is interchangeable
 - [x] pooled draws: 15,204,352 ids, 128 OSG jobs (cluster 16216036), 0.84 h mean,
       2.0 h max, 293 MB max; /data/mluzum/pbpb5020_eos/draws_pool
 - [x] shared selection list: 40,723 events, every bin within Poisson of the
@@ -307,4 +312,6 @@ Budget: 51 runs x 40,740 events x about 7 min = about 240,000 CPU-hours.
       0-75% (8 each in 0-0.02, 0.02-1, 1-5, 5-30, 30-75%; seed 20261125) taken
       from the shared list, 10 jobs x 4 events per point; clusters 16216100
       (dp19), 16216101 (dp39), 16216102 (dp51); output
-      /ospool/ap40/data/matthew.luzum/pbpb5020_eos/pilot/dpNNNN
+      /ospool/ap40/data/matthew.luzum/pbpb5020_eos/pilot/dpNNNN.
+      Unfinished jobs were edited to require x86_64-v3/v4 (SMASH SIGILL) and
+      to avoid MSU-DataMachine (OSDF TLS failures)

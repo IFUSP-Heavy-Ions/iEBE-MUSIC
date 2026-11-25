@@ -122,7 +122,13 @@ high-T relaxation, HBT sums; SMASH, so the full build) is
 `iebe-music_full_ca8b92d_0783f574.sif`, md5
 `0783f57402b6868317ff099159a8511d`, 768,745,472 bytes: framework `ca8b92d`,
 which adds the optional nucleus pool. Every reference run is bit-identical to
-`d7a76b0`.
+`d7a76b0`. That SMASH was built with `-march=native` (AVX2/FMA) and dies on
+x86-64-v2 workers; the production image is
+`iebe-music_full_3977465_de36b20a.sif`, md5
+`de36b20ade2c5803fd9fa15196da93de`, 768,675,840 bytes: framework `3977465`,
+SMASH for the baseline x86-64. Every non-SMASH reference run is bit-identical
+to `ca8b92d`; SMASH runs are bit-identical except for ~1e-9 relative changes in
+a few Pb-Pb Q-vector and HBT entries (no FMA).
 
 ## 4. How a run is made
 
