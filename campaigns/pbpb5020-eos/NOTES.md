@@ -290,6 +290,8 @@ Budget: 51 runs x 40,740 events x about 7 min = about 240,000 CPU-hours.
 - [x] oversampling: iss_calls 1, N 10000 (4 samples central)
 - [x] importance-sampling allocation (N1 = 5000), event_selection.json
 - [x] design: 50 points (seed 1), design.csv
+- [x] image iebe-music_full_ca8b92d_0783f574.sif (md5 0783f574...), published on OSDF;
+      reference runs bit-identical to d7a76b0, Pb-Pb pool template = timing runs
 - [ ] pooled draws (15.2M ids, 128 OSG jobs) and the shared selection list
 - [x] dictionaries: /data/mluzum/pbpb5020_eos/dps (DesignPoint1-50, and
       DesignPoint51 = the lattice truth, DesignPoint1 with the lattice eos_dict)

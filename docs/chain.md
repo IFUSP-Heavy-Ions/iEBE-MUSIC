@@ -118,7 +118,11 @@ The pbpb5020-eos image (framework `d7a76b0`: `iss_calls`, EoS priors with a
 high-T relaxation, HBT sums; SMASH, so the full build) is
 `iebe-music_full_d7a76b0_ce7aac59.sif`, md5 `ce7aac598dc500916f314b7b0bb7cd6a`,
 768,720,896 bytes (published 2026-11-25; local copy in
-`/data/mluzum/chain_staging/images/`).
+`/data/mluzum/chain_staging/images/`). It was superseded the same day by
+`iebe-music_full_ca8b92d_0783f574.sif`, md5
+`0783f57402b6868317ff099159a8511d`, 768,745,472 bytes: framework `ca8b92d`,
+which adds the optional nucleus pool. Every reference run is bit-identical to
+`d7a76b0`.
 
 ## 4. How a run is made
 
