@@ -303,4 +303,8 @@ Budget: 51 runs x 40,740 events x about 7 min = about 240,000 CPU-hours.
       DesignPoint51 = the lattice truth, DesignPoint1 with the lattice eos_dict)
 - pilot: dp 39 (softest, <c_s^2> 0.093 over 0.15-0.3 GeV), dp 19 (stiffest,
   0.459) and the lattice (0.234), about 40 events each across centrality
-- [ ] OSG pilot: SIF from d7a76b0, a few design points
+- [ ] OSG pilot (2026-11-25): image ca8b92d_0783f574, 40 events stratified over
+      0-75% (8 each in 0-0.02, 0.02-1, 1-5, 5-30, 30-75%; seed 20261125) taken
+      from the shared list, 10 jobs x 4 events per point; clusters 16216100
+      (dp19), 16216101 (dp39), 16216102 (dp51); output
+      /ospool/ap40/data/matthew.luzum/pbpb5020_eos/pilot/dpNNNN
