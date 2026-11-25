@@ -209,8 +209,17 @@ mode "curve"):
 - beyond 60%: 10 per percent;
 - geometric tapers over 5-6%, 10-11% and 60-65%.
 
-It assumes 15 million drawn events below b_max (coverage 0.746), about
-550 CPU-hours at 0.13 s each. Below 0.0006% every drawn event is simulated.
+It assumes 15 million drawn events below b_max (coverage 0.746). Below
+0.0006% every drawn event is simulated.
+
+Cost of the draws: 0.41-0.63 s per event on one OSG core, nearly all of it
+the hard-core nucleon sampler at A = 208. The 0.13 s first quoted was wall
+time with several processes. So 15M draws is about 7,500 CPU-hours, roughly
+3% of the campaign.
+- Run on OSG (2026-11-25): cluster 16215973, 1,500 blocks of 10,000 ids,
+  image iebe-music_full_d7a76b0_ce7aac59.sif.
+- The 2-block smoke test reproduced the local draws of ids 0-59 bit for bit
+  (b, npart, mult).
 TRENTo is the same at every design point, so the draws, the calibration and
 the accepted list are made once and shared.
 
@@ -260,5 +269,9 @@ Budget: 51 runs x 40,740 events x about 7 min = about 240,000 CPU-hours.
 - [x] oversampling: iss_calls 1, N 10000 (4 samples central)
 - [x] importance-sampling allocation (N1 = 5000), event_selection.json
 - [x] design: 50 points (seed 1), design.csv
-- [ ] 15M draws and the shared selection list
+- [ ] 15M draws (OSG cluster 16215973) and the shared selection list
+- [x] dictionaries: /data/mluzum/pbpb5020_eos/dps (DesignPoint1-50, and
+      DesignPoint51 = the lattice truth, DesignPoint1 with the lattice eos_dict)
+- pilot: dp 39 (softest, <c_s^2> 0.093 over 0.15-0.3 GeV), dp 19 (stiffest,
+  0.459) and the lattice (0.234), about 40 events each across centrality
 - [ ] OSG pilot: SIF from d7a76b0, a few design points
