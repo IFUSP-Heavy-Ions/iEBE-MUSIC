@@ -2,7 +2,7 @@
  "WS_radius": 6.62, "WS_diffusiveness": 0.546, "beta_2": 0.0, "gamma": 0.0, "beta_3": 0.0,
  "number_nucleons": 208, "correlation_length": 0.8, "correlation_strength": -1.0,
  "sigma_k": 1.05, "nucleon-width": 1.12, "reduced-thickness": 0.063,
- "normalization": 20.0, "cross-section": 7.0, "tau": 1.5,
+ "normalization": 19.6, "cross-section": 7.0, "tau": 1.5,
  "shear_viscosity_3_eta_over_s_T_kink_in_GeV": 0.223,
  "shear_viscosity_3_eta_over_s_low_T_slope_in_GeV": -0.776,
  "shear_viscosity_3_eta_over_s_high_T_slope_in_GeV": 0.37,

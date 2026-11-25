@@ -14,7 +14,7 @@ RHIC + LHC fit). `template_pbpb5020.py` holds them.
 | | value | note |
 |---|---|---|
 | TRENTo p, sigma_k, w | 0.063, 1.05 (k = 0.907), 1.12 fm | |
-| N[5.02 TeV] | 20.0 | tuned to ALICE dN_ch/deta 0-5% (1943 +- 54): 1956 +- 47 over 12 events evenly in 0-5%, lattice EoS, decays only (the MAP gives 14.2 at 2.76 TeV only) |
+| N[5.02 TeV] | 19.6 | tuned to ALICE dN_ch/deta 0-5% (1943 +- 54). N = 20.0 gave 1956 +- 47 over 12 events evenly in 0-5% (lattice EoS, decays only), and SMASH adds about 1.7%; 19.6 absorbs that (the MAP gives 14.2 at 2.76 TeV only) |
 | sigma_NN | 7.0 fm^2 | conventional TRENTo value at 5.02 TeV |
 | nuclei | 208Pb, R = 6.62 fm, a = 0.546 fm, spherical | Isobar-Sampler |
 | nucleon hard core | 0.8 fm (correlation strength -1) | JETSCAPE's d_min = 1.44 fm is weakly constrained; user's choice |
@@ -93,11 +93,37 @@ From `scripts/cross_section/xsec_point.py`, n_conf 600:
 - No event beyond b_max reaches the 60% multiplicity threshold (tail share
   0); at 70% the share is 1.2%, at 80% 7.8%. So 0-60% is complete.
 
+## SMASH sampled-rapidity scan (2026-11-24)
+
+Three central events (708, 2452, 3019), N = 20.0, lattice EoS, Grad, HBT on,
+image full-44d5e53, iSS sampled range y = +-2.5, +-3.5, +-4.5.
+
+- In the summed window (sampled range minus 1.25), dN_ch/deta is 1961-1967:
+  about 1.7% above decays only on the same events.
+- Up to |y| = range - 1.25, the charged dN/dy is flat within about 1% and
+  <pT> within 0.4% (0.5-unit bins of y_profile).
+- The freeze-out surface reaches r = 13-15 fm, inside the +-20 fm box.
+- Time per central event: 1523-1594 s (+-2.5), 1711-1804 s (+-3.5),
+  1796-1897 s (+-4.5). MUSIC takes 265-278 s of it.
+- iSS's `number_of_particles_needed` = 100000 gave 41 samples per event. It
+  counts per unit rapidity (samples = needed / (6 dN/dy of thermal pi+)), so
+  the sample count does not depend on the sampled range.
+- SMASH runs about 27 s per sample at +-2.5 and 34 s at +-4.5: 90% of the
+  time per event.
+
+Caveat, still being checked: SMASH stops at End_Time = 100 fm/c (lab time).
+In the +-4.5 runs, about 5,800 particles per sample were still unformed
+(t = tau cosh eta_s > 100 fm/c) when it stopped; in the +-2.5 runs, about
+290. Those particles never rescatter. The charged plateau above is not
+sensitive to that, so identified spectra at |y| > 2 need a direct
+comparison with a later End_Time before the window is fixed.
+
 ## Status
 
 - [x] template written
 - [x] draws work: 110 ms per event at A = 208
-- [x] N[5.02 TeV] = 20.0 (decays only; to be checked with SMASH)
+- [x] N[5.02 TeV] = 19.6 (20.0 decays only, minus SMASH's +1.7%)
 - [x] cross section and b_max coverage (0.746 of sigma_inel below b_max; 0-60% complete)
-- [ ] SMASH sampled-rapidity scan; timing, grid extent, oversampling count
+- [x] SMASH sampled-rapidity scan; timing, grid extent
+- [ ] SMASH End_Time (100 fm/c) vs the forward rapidities; oversampling target
 - [ ] design generator, importance-sampling bins, OSG pilot
