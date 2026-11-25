@@ -64,6 +64,17 @@ GRID_CHECKED = ("pt_edges", "harmonics", "species_pdg", "species_nmax",
                 "y_profile_edges")
 
 
+def same_grid(a, b):
+    """Equal, floats to 1e-12: workers with different CPUs compute the same
+    grid to the last bit or two (seen: hbt_q_weight, 7e-16)."""
+    a, b = np.asarray(a), np.asarray(b)
+    if a.shape != b.shape:
+        return False
+    if a.dtype.kind == "f" and b.dtype.kind == "f":
+        return bool(np.allclose(a, b, rtol=1e-12, atol=0.0, equal_nan=True))
+    return bool(np.array_equal(a, b))
+
+
 def check_grid(h, h0, name, variants):
     """Refuse a file whose grid (Q binning, HBT grid) or HBT rapidity window
     differs from the first file's: the merged file has one grid, so its sums
@@ -72,7 +83,7 @@ def check_grid(h, h0, name, variants):
                   if k.startswith("hbt_") or k in GRID_CHECKED)
     for k in keys:
         if (k not in h["grid"] or k not in h0["grid"]
-                or not np.array_equal(h["grid/" + k][()], h0["grid/" + k][()])):
+                or not same_grid(h["grid/" + k][()], h0["grid/" + k][()])):
             raise ValueError("%s: /grid/%s differs from the first file's" %
                              (name, k))
     for v in variants:
