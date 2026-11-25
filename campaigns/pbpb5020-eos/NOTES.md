@@ -26,7 +26,7 @@ RHIC + LHC fit). `template_pbpb5020.py` holds them.
 | afterburner | SMASH | |
 | delta f | one variant, "Grad": deltaf_model 0, bulk_deltaf_kind 20, RegVisYield 1 | iSS 22-moment (WSU, NEoS-BQS coefficients); the viscous yield of each species in a cell is capped at 2 N_eq, as JETSCAPE regulated |delta f| <= f_eq |
 | b_max | 14.69 fm | MakeDictionaries' formula at sigma_NN 7.0 |
-| hydro grid | +-20 fm, 0.2 fm cells, fixed | the adaptive grid was fitted for Zr with a fixed EoS |
+| hydro grid | 0.2 fm cells; box chosen per event from the EoS and the multiplicity (`adaptive_grid.json`), enlarged and rerun if the surface reaches the edge | "Hydro box" below |
 | HBT | on (`control_dict['hbt'] = True`) | |
 
 ## Equation of state
@@ -279,6 +279,88 @@ is validated by leave-one-out and leave-a-block-out cross-validation.
 
 Budget: 51 runs x 40,740 events x about 7 min = about 240,000 CPU-hours.
 
+## Hydro box (2026-11-25)
+
+The pilot ran on a fixed +-20 fm box. The stiffest point (dp 19) lost 2 of
+its 40 events to "Freeze-out cell at the boundary", while the softest
+(dp 39) never went past 15 fm. The box is now chosen per event.
+
+Calibration (`adaptive_grid_calibration.csv`): 11 events from 0 to 60%
+centrality on a +-28 fm box at every design point, 561 runs. "Need" below
+is the larger of max|x| and max|y| of the freeze-out surface.
+- For the same central event the need runs from 11.2 fm to 20.5 fm across
+  the design.
+- No average of c_s^2 over a temperature window predicts it (best fit rms
+  1.35 fm, misses above 3 fm): stiffness at high T enlarges the fireball,
+  stiffness near T_sw shrinks it.
+- At one EoS the need is linear in ln(mult), down to a floor set by the
+  initial profile: rms 0.25-0.8 fm per point. The scatter that remains is
+  event shape.
+
+Rule (`plan_lnmult_half_width` in the driver; fit by `fit_adaptive_grid.py`):
+
+    need = max(R999 + 1.5 fm, a + b ln(mult) + 2.5 sigma)
+    half-width = need + 0.6 fm, rounded up to a cell
+
+- (a, b, sigma) per EoS table, looked up by the first 16 hex digits of the
+  table's `inputs_sha256`; sigma = max(0.127 b, 0.35 fm).
+- R999 is the radius holding 99.9% of the TRENTo profile; mult is its sum.
+- A table that is not in the list gets the widest box any listed one would
+  (the `default` entry). The key includes the hadron list, so a run with
+  afterburner "decay" uses the default.
+- 0.6 fm is the clearance MUSIC needs: it ran with the surface 0.49 fm from
+  the edge and stopped with 0.29 fm.
+- If MUSIC still stops at the edge the event is rerun in a box 1.15 times
+  wider, up to 3 times and +-28 fm. A wrong prediction costs time, not events.
+- Leave-one-out over the 561 runs: 3 would have needed a rerun (0.5%).
+  Between 2 and 3 sigma the total cost changes by 2%.
+- `grid_extent_<id>.csv` gains R999_trento, grid_box_predicted,
+  grid_box_used, grid_attempts and grid_rule.
+
+Expected over the selection list: mean grid area 0.50 of the +-20 fm box
+(0.35 at the softest point, 1.00 at dp 43, the only point besides dp 19
+with boxes above +-20 fm; its largest is +-23.6 fm).
+
+Validation with SMASH (14 events at dp 19, 23, 29, 39, 43, 51, dictionaries
+as regenerated, driver 6e1441a on image 3977465):
+- every event found its own table's entry (`grid_rule` = `eos:<key>`);
+- against the same events on +-28 fm the surface has the same extent and
+  cell count (at most 8 cells of 300,000 differ) and the hydro-level mean pT
+  agrees to 1e-4 or better. Sampled yields differ by 1-4% in events with 2-10
+  samples, as any last-bit change that moves iSS's random stream does;
+- the two dp 19 events the pilot lost now finish, on the second attempt:
+  1691743 needs 20.5 fm (predicted box 19.6, rerun on 22.6) and 10549712
+  needs 21.1 fm (20.8, rerun on 24.0). Both sit 2.5-3 fm above dp 19's line,
+  so the stiffest points will rerun a few percent of their central events;
+- MUSIC's time is not proportional to the area: about a quarter of its
+  +-20 fm time does not scale. With MUSIC at half of an event's time, an
+  event costs about 0.8 of what it did on the fixed box.
+
+The 39 points not in the first calibration were measured with afterburner
+"decay", whose table has a slightly different hadron-gas part (e_fo 0.1146
+instead of 0.1174 GeV/fm^3). Where both exist the need agrees within 0.2 fm.
+
+## HBT radii at the lattice point (2026-11-25)
+
+The curation session found pion radii 1.4-1.7 times ALICE's in the pilot.
+That is what this parameter set gives; it is not a defect in the sums.
+- Lattice EoS (dp 51), 0-1%, K_T 0.20-0.25 GeV: R_out / R_side / R_long =
+  9.5 / 9.7 / 13.5 fm from the HBT sums.
+- The same widths taken directly from one event's particle list (pions in
+  the same K_T bin, own-LCMS coordinates): 10.4 / 10.1 / 13.2 fm with
+  SMASH, 10.1 / 9.6 / 13.1 fm with decays only. SMASH is not the cause.
+- The fireball is large and lives long: the T_sw = 136 MeV surface starts
+  at r = 10 fm at tau_0 = 1.5 fm/c, grows to 13.5-15 fm, and hydro ends at
+  16.4 fm/c. Half of the emission comes after 13.8 fm/c.
+- The EoS moves it strongly: dp 19 (stiff) gives 5.8 / 11.7 / 11.7 fm,
+  dp 39 (soft) 13.0 / 9.7 / 17.0 fm.
+- Bulk observables at the lattice point, 0-5%: pi+- 1823, K+- 302,
+  p + pbar 94; <pT> 0.532 / 0.858 / 1.421 GeV.
+
+Open (user): this does not matter for a closure test against the lattice
+point. If measured radii enter the likelihood, the EoS would be pulled to
+compensate for parameters that are fixed here (T_sw, nucleon width, tau_fs).
+
 ## Status
 
 - [x] template written
@@ -305,7 +387,11 @@ Budget: 51 runs x 40,740 events x about 7 min = about 240,000 CPU-hours.
       instead of 585): the calibration table had no knots below 0.037%.
       Fixed in codes/event_selection.py (geometric knots in the top 1%).
 - [x] dictionaries: /data/mluzum/pbpb5020_eos/dps (DesignPoint1-50, and
-      DesignPoint51 = the lattice truth, DesignPoint1 with the lattice eos_dict)
+      DesignPoint51 = the lattice truth, DesignPoint1 with the lattice eos_dict);
+      regenerated 2026-11-25 with the adaptive box (the fixed-box ones are in
+      dps_fixed_box_20251125)
+- [x] hydro box per event: calibrated on all 51 points, validated with SMASH
+- [ ] image with the adaptive-box driver (6e1441a or later): not built yet
 - pilot: dp 39 (softest, <c_s^2> 0.093 over 0.15-0.3 GeV), dp 19 (stiffest,
   0.459) and the lattice (0.234), about 40 events each across centrality
 - [ ] OSG pilot (2026-11-25): image ca8b92d_0783f574, 40 events stratified over

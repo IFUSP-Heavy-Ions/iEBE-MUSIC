@@ -846,6 +846,15 @@ at dx = 0.15). That is the measured version of "peripheral events are relatively
 resolved" — and it is a property of the *margin*, not of the rule's size dependence, which is
 already ~1:1 in `R_rms_IC`.
 
+**Since 2026-11-25** (after the campaigns this section describes): the guard in step 6 is
+conditional. With `max_half_width` in the coefficients the box may also grow past the nominal
+one, and a MUSIC run that stops with the freeze-out surface at the edge is redone in a box
+`retry_growth` times wider, up to `max_retries`. Every event starts again from the parameter
+file's box. Coefficients with `"rule": "lnmult"` replace steps 1-3 by
+`need = max(R999 + floor_offset, a + b ln(mult) + n_sigma sigma)`, `half = need + pad`, with
+one `(a, b, sigma)` per EoS table: for a campaign that varies the EoS, where the same initial
+condition needs boxes from 11 to 20 fm (`campaigns/pbpb5020-eos/NOTES.md`, "Hydro box").
+
 The `fixed_cells` mode exists in the driver but is **not exposed by any parameter file** (the
 only occurrences are `adaptive_fixed_cells: 0` in a few early `c4dx*` files), and as
 implemented it holds the cell count fixed while leaving `dx_used = grid_step` — which is not

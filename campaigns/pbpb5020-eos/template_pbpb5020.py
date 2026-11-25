@@ -33,6 +33,20 @@ control_dict = {   'initial_state_type': 'TRENTo',
     'nucleus_pool_size': 262144,
     'hbt': {'y_cut': 2.0}}
 
+# Hydro box, chosen per event (NOTES.md, "Hydro box"): half-width =
+# max(R999 + floor_offset, a + b ln(mult) + n_sigma sigma) + pad, with one
+# (a, b, sigma) per EoS table, keyed by the table's digest. TRENTo runs on
+# the +-20 fm box below first; if the freeze-out surface still reaches the
+# edge the event is rerun on a box retry_growth times wider.
+import json as _json
+import os as _os
+
+with open(
+        _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+                      'adaptive_grid.json')) as _f:
+    control_dict['adaptive_grid_coeffs'] = _json.load(_f)
+control_dict['adaptive_grid'] = True
+
 isobars_conf_dict_target = {   'isobar_samples': {   'description': 'Options for the isobar nucleon-position samples',
                           'number_configs': {   'description': 'Number of configurations to be '
                                                                'sampled.',
