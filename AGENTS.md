@@ -78,6 +78,18 @@ defaults — prefer those over guessing flags.
 
 ## Gotchas
 
+- **Push with `scripts/push.sh`, and do not call a push done until its CI result is in.**
+  `scripts/push.sh <remote> <branch> [<commit>]` pushes, then waits for every GitHub Actions run
+  on that commit (`scripts/wait_ci.sh`) and prints the failing log lines. A bare `git push` only
+  runs the local hook; a red workflow then shows up as an e-mail and nothing else. That is how
+  the "Build Test" stayed red from 2026-11-20 (5a970cd) to 11-25: the runner's apt list lacked
+  numpy and scipy, which iSS's `make_hrg_eos.py` has needed since the PDG2021+ list, while the
+  container build and every local image test passed. The Build Test compiles on a stock Ubuntu
+  24.04 with its own package list, which can drift from the Dockerfile's; when a push changes
+  its inputs (`BuildTest.yml`, `get_code_packages.sh`, `compile_code_packages.sh`), the pre-push
+  hook wants a passing local replica first: `scripts/ci_replica.sh [<commit>]`, about 30-40 min
+  in `ubuntu:24.04`. A pin bump is pushed in two steps, the named commit first:
+  `scripts/push.sh ifusp QGP-USP HEAD~1 && scripts/push.sh ifusp QGP-USP`.
 - **Importance sampling is two phases, and the selection is made exactly once.** Phase 1
   (`scripts/draw_events.py`, `scripts/select_events.py`) draws every event id with the sampler and
   TRENTo in batches, calibrates multiplicity to centrality, and writes the list of accepted events

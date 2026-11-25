@@ -11,7 +11,11 @@ the framework by commit, and through it every physics code by commit
 The framework pin cannot name the commit that contains it, so it always points
 at an earlier commit: to ship a change, commit and push it, then bump the SHA
 in the following commit. `scripts/check_docker_pin.sh` checks the pin before a
-push.
+push (the pre-push hook runs it on each commit being pushed). Push with
+`scripts/push.sh`, which then waits for the GitHub Actions runs on the commit
+and reports them: the named commit first, then the bump,
+
+    scripts/push.sh ifusp QGP-USP HEAD~1 && scripts/push.sh ifusp QGP-USP
 
 For Singularity/Apptainer (what OSG jobs run):
 

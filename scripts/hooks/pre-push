@@ -8,15 +8,59 @@
 #
 #     git config core.hooksPath scripts/hooks
 #
-# and every `git push` runs scripts/check_docker_pin.sh first. That script covers
-# the two failures that actually reached CI and cost a full cycle each: a
-# Dockerfile pin that no longer points at a fetchable commit, and a syntax error
-# in the shell bootstrap the runner executes.
+# For every commit being pushed it
+#   1. asks for a passing local replica of the "Build Test" workflow
+#      (scripts/ci_replica.sh) when the push changes that workflow's inputs:
+#      BuildTest.yml, codes/get_code_packages.sh (every component pin) or
+#      codes/compile_code_packages.sh (scripts/ci_build_key.sh). The workflow
+#      builds on the runner's own Ubuntu packages, so it can fail while the
+#      container build and every local test pass; it did, on every push from
+#      2026-11-20 to 11-25. Inputs the remote already has (any tip under
+#      refs/remotes/<remote>/ with the same key) need no replica.
+#   2. runs scripts/check_docker_pin.sh on that commit as committed: a fetchable
+#      Dockerfile pin, and shell and Python files that parse.
 #
-# Bypass with `git push --no-verify` when you know why it is failing.
+# Set CI_REPLICA_SKIP=1 to push without the replica (say why in the commit); bypass
+# everything with `git push --no-verify` only when you know why it is failing.
+# After pushing, wait for the Actions runs: scripts/push.sh does both.
 
 set -euo pipefail
 
 TOPLEVEL="$(git rev-parse --show-toplevel)"
+REMOTE_NAME="${1:-}"
+RECORDS="$(git rev-parse --path-format=absolute --git-common-dir)/ci-replica"
+ZERO=0000000000000000000000000000000000000000
 
-exec "${TOPLEVEL}/scripts/check_docker_pin.sh"
+# build-input keys the remote already has
+known=""
+if [[ -n "${REMOTE_NAME}" ]]; then
+    while read -r tip; do
+        known+=" $("${TOPLEVEL}/scripts/ci_build_key.sh" "${tip}")"
+    done < <(git for-each-ref --format='%(objectname)' "refs/remotes/${REMOTE_NAME}/" | sort -u)
+fi
+
+status=0
+checked=""
+while read -r local_ref local_sha remote_ref remote_sha; do
+    [[ "${local_sha}" == "${ZERO}" ]] && continue   # deleting a branch
+    [[ " ${checked} " == *" ${local_sha} "* ]] && continue
+    checked+=" ${local_sha}"
+
+    key="$("${TOPLEVEL}/scripts/ci_build_key.sh" "${local_sha}")"
+    if [[ " ${known} " != *" ${key} "* && ! -e "${RECORDS}/${key}.ok" ]]; then
+        if [[ "${CI_REPLICA_SKIP:-0}" == 1 ]]; then
+            echo "WARNING: ${local_sha:0:7} changes the Build Test inputs; no local replica (CI_REPLICA_SKIP=1)." >&2
+        else
+            echo "FAIL: ${local_sha:0:7} changes the Build Test inputs (BuildTest.yml," >&2
+            echo "      get_code_packages.sh or compile_code_packages.sh) and no local replica" >&2
+            echo "      has passed on them. Run" >&2
+            echo "          scripts/ci_replica.sh ${local_sha}" >&2
+            echo "      (about 30-40 min) and push again, or set CI_REPLICA_SKIP=1." >&2
+            status=1
+            continue
+        fi
+    fi
+
+    "${TOPLEVEL}/scripts/check_docker_pin.sh" "${local_sha}" || status=1
+done
+exit "${status}"

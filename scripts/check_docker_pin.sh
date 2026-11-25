@@ -16,17 +16,44 @@
 #   3. the pinned commit is reachable on the remote the Dockerfile fetches from,
 #      by replaying the Dockerfile's own git sequence into a scratch directory
 #
-# Usage: scripts/check_docker_pin.sh
+# Usage: scripts/check_docker_pin.sh [<commit>]
+#   With no argument it checks the working tree. With a commit it checks the files
+#   as committed there, which is what the pre-push hook passes: the commit being
+#   pushed, so pushing a commit other than the checked-out one (e.g. the commit a
+#   pin bump will name, before the bump itself) checks the right Dockerfile.
 # Exit 0 if the pin is good, 1 otherwise.
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DOCKERFILE="${REPO_ROOT}/docker/Dockerfile"
 SCRATCH="$(mktemp -d)"
 trap 'rm -rf "${SCRATCH}"' EXIT
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
+
+COMMIT="${1:-}"
+if [[ -n "${COMMIT}" ]]; then
+    COMMIT="$(git -C "${REPO_ROOT}" rev-parse --verify -q "${COMMIT}^{commit}")" \
+        || fail "no such commit: ${1}"
+    TREE="${SCRATCH}/tree"
+    mkdir -p "${TREE}"
+    git -C "${REPO_ROOT}" archive "${COMMIT}" | tar -x -C "${TREE}"
+    SELF="${COMMIT}"
+    echo "checking   : ${COMMIT} (as committed)"
+else
+    TREE="${REPO_ROOT}"
+    SELF="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
+fi
+DOCKERFILE="${TREE}/docker/Dockerfile"
+
+# tracked files matching an extended regex, in the commit or the working tree
+tracked() {
+    if [[ -n "${COMMIT}" ]]; then
+        git -C "${REPO_ROOT}" ls-tree -r --name-only "${COMMIT}" | grep -E "$1" || true
+    else
+        git -C "${REPO_ROOT}" ls-files | grep -E "$1" || true
+    fi
+}
 
 [[ -f "${DOCKERFILE}" ]] || fail "no ${DOCKERFILE}"
 
@@ -54,7 +81,6 @@ if [[ ! "${PIN}" =~ ^[0-9a-f]{40}$ ]]; then
 fi
 
 # 2. must not be the commit that contains this Dockerfile
-SELF="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
 if [[ "${PIN}" == "${SELF}" ]]; then
     fail "pin ${PIN} is the SHA of the commit that contains this Dockerfile.
       That commit does not exist on the remote yet, so the fetch cannot succeed.
@@ -64,17 +90,18 @@ fi
 
 # 3. replay the Dockerfile's own sequence against the remote
 echo "replaying the Dockerfile git sequence ..."
-git -C "${SCRATCH}" init -q .
-git -C "${SCRATCH}" remote add origin "${REMOTE}"
-if ! git -C "${SCRATCH}" fetch -q --depth=1 origin "${PIN}"; then
+mkdir -p "${SCRATCH}/fetch"
+git -C "${SCRATCH}/fetch" init -q .
+git -C "${SCRATCH}/fetch" remote add origin "${REMOTE}"
+if ! git -C "${SCRATCH}/fetch" fetch -q --depth=1 origin "${PIN}"; then
     fail "pin ${PIN} is not fetchable from ${REMOTE}.
       Either it was never pushed, or the branch history no longer makes it
       reachable. Note that get_code_packages.sh clones --branch QGP-USP
       before fetching its SHA, so a force-push or branch deletion
       upstream can make a previously valid pin unfetchable."
 fi
-git -C "${SCRATCH}" checkout -q FETCH_HEAD
-GOT="$(git -C "${SCRATCH}" rev-parse HEAD)"
+git -C "${SCRATCH}/fetch" checkout -q FETCH_HEAD
+GOT="$(git -C "${SCRATCH}/fetch" rev-parse HEAD)"
 if [[ "${GOT}" != "${PIN}" ]]; then
     fail "checked out ${GOT}, expected ${PIN}"
 fi
@@ -94,19 +121,19 @@ echo "OK: pin ${PIN} is fetchable from ${REMOTE} and checks out exactly."
 #
 # The tracked *.py sweep below is for the same reason: CI does not exercise the
 # Python entry points, so a typo there only shows up when someone generates jobs.
-mapfile -t SHELL_SCRIPTS < <(git -C "${REPO_ROOT}" ls-files '*.sh')
+mapfile -t SHELL_SCRIPTS < <(tracked '\.sh$')
 [[ ${#SHELL_SCRIPTS[@]} -gt 0 ]] || fail "no tracked *.sh files found"
 for script in "${SHELL_SCRIPTS[@]}"; do
-    bash -n "${REPO_ROOT}/${script}" || fail "${script} does not parse (bash -n)"
+    bash -n "${TREE}/${script}" || fail "${script} does not parse (bash -n)"
 done
 echo "OK: ${#SHELL_SCRIPTS[@]} shell scripts parse."
 
 command -v python3 >/dev/null 2>&1 || fail "python3 not found; cannot check the *.py files"
-PY_FILES="$(git -C "${REPO_ROOT}" ls-files '*.py')"
+PY_FILES="$(tracked '\.py$')"
 [[ -n "${PY_FILES}" ]] || fail "no tracked *.py files found"
 # PYTHONPYCACHEPREFIX keeps the .pyc files out of the working tree.
 (
-    cd "${REPO_ROOT}"
+    cd "${TREE}"
     PYTHONPYCACHEPREFIX="${SCRATCH}/pycache" python3 -m py_compile ${PY_FILES}
 ) || fail "one or more tracked *.py files do not compile"
 echo "OK: $(echo "${PY_FILES}" | wc -w) python files compile."
