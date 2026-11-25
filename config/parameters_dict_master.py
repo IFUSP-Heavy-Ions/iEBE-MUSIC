@@ -58,6 +58,16 @@ control_dict = {
     # fewer than iss_calls.  10 is what every campaign before 2026-11-25 used
     # (at least 10 samples per event); 1 lets central events have only a few.
     'iss_calls': 10,
+    # Transverse box per event (codes/hydro_plus_UrQMD_driver.py,
+    # apply_adaptive_grid): TRENTo runs on the box above, the IC's RMS radius
+    # predicts the freeze-out size, and TRENTo reruns on the chosen box. A
+    # MUSIC run whose freeze-out reaches the edge is redone in a larger box.
+    # The rule comes from config/adaptive_grid.json unless
+    # 'adaptive_grid_coeffs' gives a campaign's own (c0..c5, S_ref,
+    # stiffness_T_GeV, sigma, k_tail, n_sigma, max_half_width, retry_growth,
+    # max_retries).
+    'adaptive_grid': False,
+    'adaptive_grid_coeffs': None,
     'EOSType': 0,
     'EOSId': 0,
     'EOSFileName': "EoS.pkl",

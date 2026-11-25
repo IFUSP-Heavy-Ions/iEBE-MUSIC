@@ -200,6 +200,12 @@ def get_initial_condition(database, initial_type, iev, event_id, seed_add,
                              "trento_results_{}".format(event_id))
         trento_output = para_dict.get('trento_output', 'test_path.dat')
         file_name = path.join(trento_output, "0.dat")
+        if para_dict.get('adaptive_grid'):
+            # every event starts from the parameter file's box
+            reset_grid_to_nominal(para_dict)
+            if path.exists(path.join(res_path, file_name)):
+                # an existing TRENTo output may be on an adapted box
+                shutil.rmtree(res_path)
         #check existing events ...
         if not path.exists(path.join(res_path, file_name)):
             run_trento(event_id)
@@ -224,11 +230,12 @@ def get_initial_condition(database, initial_type, iev, event_id, seed_add,
                 new_L = apply_adaptive_grid(res_path, file_name, para_dict,
                                             grid_step)
                 if new_L is not None:
-                    # rerun TRENTo on the chosen grid, then recollect
+                    # rerun TRENTo on the chosen grid, then recollect. The
+                    # summary (b, mult) stays the nominal box's: mult is the
+                    # grid sum, and the selection check compares it with the
+                    # draws, which used the nominal box.
                     run_trento(event_id)
                     collect_trento_event(res_path)
-                    write_trento_event_summary(res_path, final_results_folder,
-                                               event_id, seed_add)
                     grid_max = new_L
                 # keep the diagnostic honest about which grid was actually used
                 para_dict['free_stream_grid_max'] = grid_max
@@ -516,8 +523,14 @@ def plan_adaptive_half_width(R_rms_trento,
                              coeffs,
                              grid_step,
                              current_grid_max,
-                             fixed_cells=0):
+                             fixed_cells=0,
+                             eos_stiffness=None):
     """Half-width the box needs, in fm, or None to leave the box alone.
+
+    With "c5" in `coeffs` the prediction gains c5*(S - S_ref), S being
+    `eos_stiffness` (the mean c_s^2 of the run's EoS table over
+    coeffs["stiffness_T_GeV"], see eos_mean_cs2): a stiffer EoS expands
+    further. Without "c5" the rule is the one fitted on Zr at a fixed EoS.
 
     Two schemes, selected by `fixed_cells`:
 
@@ -533,6 +546,8 @@ def plan_adaptive_half_width(R_rms_trento,
     r_rms = (coeffs["c0"] + coeffs["c1"]*R_rms_trento
              + coeffs["c2"]*math.log(e_fo)
              + coeffs["c3"]*math.log(normalization) + coeffs["c4"]*tau)
+    if "c5" in coeffs and eos_stiffness is not None:
+        r_rms += coeffs["c5"]*(eos_stiffness - coeffs.get("S_ref", 0.0))
     need = coeffs["k_tail"]*(r_rms + coeffs["n_sigma"]*coeffs["sigma"])
     if fixed_cells and fixed_cells > 0:
         n_cells = int(fixed_cells)
@@ -555,16 +570,79 @@ def plan_adaptive_half_width(R_rms_trento,
     return half, n_cells, r_rms, dx_used
 
 
+GRID_KEYS_TRENTO = ("grid-max", "grid-step")
+GRID_KEYS_MUSIC = ("X_grid_size_in_fm", "Y_grid_size_in_fm", "Grid_size_in_x",
+                   "Grid_size_in_y")
+
+
+def _nominal_input(name):
+    """The job's unpatched copy of an input file (model_parameters)."""
+    for cand in (path.join("model_parameters", name),
+                 path.join("..", "model_parameters", name)):
+        if path.exists(cand):
+            return cand
+    return None
+
+
+def reset_grid_to_nominal(para_dict):
+    """Put the transverse box back to the parameter file's before an event.
+
+    The adaptive grid patches TRENTo/input and MUSIC/music_input_mode_2 in
+    place, and every event of a job runs in the same folder, so without this
+    an event would start from the previous event's box, and, because the old
+    rule never grew the box, a central event after a peripheral one stayed in
+    the small box. Returns the nominal half-width, or None if unknown.
+    """
+    nominal = None
+    for name, keys in (("TRENTo/input", GRID_KEYS_TRENTO),
+                       ("MUSIC/music_input_mode_2", GRID_KEYS_MUSIC)):
+        src = _nominal_input(name)
+        if src is None:
+            continue
+        for key in keys:
+            value = read_input_value(src, key)
+            if value is not None:
+                patch_input_value(name, key, value)
+                if key == "grid-max":
+                    nominal = float(value)
+    if nominal is not None:
+        para_dict['free_stream_grid_max'] = nominal
+    return nominal
+
+
+def eos_mean_cs2(t_range):
+    """Mean c_s^2 over T in `t_range` (GeV), uniform in T, of the EoS table
+    MUSIC runs with (MUSIC's EOS_table_file, columns e, T, P, c_s^2, s), or
+    None without such a table."""
+    music_input = path.join("MUSIC", "music_input_mode_2")
+    name = read_input_value(music_input, "EOS_table_file")
+    if not name:
+        return None
+    table = path.join("MUSIC", name)
+    if not path.exists(table):
+        return None
+    d = np.loadtxt(table, skiprows=1, usecols=(1, 3))
+    t_grid = np.linspace(float(t_range[0]), float(t_range[1]), 400)
+    return float(np.mean(np.interp(t_grid, d[:, 0], d[:, 1])))
+
+
 def apply_adaptive_grid(res_path, file_name, para_dict, grid_step):
     """Measure the TRENTo IC, choose a box, and rerun TRENTo on that grid.
 
-    Returns the new half-width, or None if the current box was kept.
+    TRENTo has just run on the nominal box (reset_grid_to_nominal). The box
+    may shrink, and grows past the nominal one only when the coefficients set
+    "max_half_width". para_dict['grid_floor_half_width'] (a retry after MUSIC
+    hit the boundary) is a lower bound. Records the plan in para_dict
+    ('grid_box_predicted', 'grid_box_used'). Returns the new half-width, or
+    None if the current box was kept.
     """
     trento_input = path.join("TRENTo", "input")
     music_input = path.join("MUSIC", "music_input_mode_2")
 
     trento_matrix = np.loadtxt(path.join(res_path, file_name))
-    trento_grid_max = float(read_input_value(trento_input, "grid-max") or 15.0)
+    # the extent of the array TRENTo produced, not the requested grid-max
+    current_cells = int(trento_matrix.shape[0])
+    trento_grid_max = current_cells*grid_step/2.0
     R_rms = ic_rms_from_flat(trento_matrix.ravel(), trento_grid_max, grid_step)
     if R_rms is None:
         return None
@@ -575,6 +653,12 @@ def apply_adaptive_grid(res_path, file_name, para_dict, grid_step):
     tau = float(para_dict.get("free_stream_tau", 1.0))
 
     coeffs = read_adaptive_coeffs()
+    stiffness = None
+    if "c5" in coeffs:
+        stiffness = eos_mean_cs2(coeffs.get("stiffness_T_GeV", (0.15, 0.30)))
+        if stiffness is None:
+            raise ValueError("adaptive grid: coefficients have an EoS term "
+                             "(c5) but MUSIC has no EOS_table_file")
     fixed_cells = 0
     for _k in ("adaptive_fixed_cells", "fixed_cells"):
         try:
@@ -588,30 +672,58 @@ def apply_adaptive_grid(res_path, file_name, para_dict, grid_step):
             pass
     L, n_cells, r_rms, dx_used = plan_adaptive_half_width(
         R_rms, t_freeze, normalization, tau, coeffs, grid_step, trento_grid_max,
-        fixed_cells)
+        fixed_cells, eos_stiffness=stiffness)
+    para_dict['grid_box_predicted'] = L
+    para_dict['grid_eos_stiffness'] = stiffness
 
-    current_cells = int(round(2.0*trento_grid_max/grid_step))
-    # only act if it actually saves, and never grow past what was measured
-    if L >= trento_grid_max - 1e-9 or n_cells >= current_cells:
+    max_half = coeffs.get("max_half_width")
+    floor = para_dict.get('grid_floor_half_width')
+    if floor:
+        L = max(L, float(floor))
+    if max_half is not None:
+        L = min(L, float(max_half))
+    if not fixed_cells:
+        n_cells = 2*int(math.ceil(L/grid_step - 1e-9))
+        L = n_cells*grid_step/2.0
+    grow = max_half is not None or floor
+    if n_cells == current_cells or (not grow and n_cells > current_cells):
         print("\U0001F9FE  adaptive grid: keeping +-{:.1f} fm (needs +-{:.1f})".
               format(trento_grid_max, L),
               flush=True)
+        para_dict['grid_box_used'] = trento_grid_max
         return None
 
     print(
-        "\U0001F9FE  adaptive grid: TRENTo R_rms={:.2f} -> r_rms_pred={:.2f} -> "
-        "+-{:.1f} fm, {} cells, dx={:.3f} requested (was +-{:.1f}, {}, dx={:.3f})"
-        .format(R_rms, r_rms, L, n_cells, dx_used, trento_grid_max,
-                current_cells, grid_step),
+        "\U0001F9FE  adaptive grid: TRENTo R_rms={:.2f}{} -> r_rms_pred={:.2f} -> "
+        "+-{:.1f} fm, {} cells, dx={:.3f} (was +-{:.1f}, {}, dx={:.3f})"
+        .format(R_rms, "" if stiffness is None else
+                ", <c_s^2>={:.3f}".format(stiffness), r_rms, L, n_cells,
+                dx_used, trento_grid_max, current_cells, grid_step),
         flush=True)
-    if not patch_input_value(trento_input, "grid-max", "{:.4f}".format(L)):
+    # TRENTo makes ceil(2 grid-max/step) cells, which rounding can push one
+    # cell over (e.g. 10.8 fm at 0.15); half a cell less always gives n_cells,
+    # and TRENTo then centres them at exactly n_cells*step/2.
+    trento_L = (n_cells - 0.5)*grid_step/2.0 if not fixed_cells else L
+    if not patch_input_value(trento_input, "grid-max",
+                             "{:.6f}".format(trento_L)):
         return None
-    patch_input_value(trento_input, "grid-step", "{:.4f}".format(grid_step))
-    patch_input_value(music_input, "X_grid_size_in_fm", "{:.4f}".format(L))
-    patch_input_value(music_input, "Y_grid_size_in_fm", "{:.4f}".format(L))
+    patch_input_value(trento_input, "grid-step", "{:.4f}".format(dx_used))
+    patch_input_value(music_input, "X_grid_size_in_fm", "{:.4f}".format(2*L))
+    patch_input_value(music_input, "Y_grid_size_in_fm", "{:.4f}".format(2*L))
     patch_input_value(music_input, "Grid_size_in_x", "{:d}".format(n_cells))
     patch_input_value(music_input, "Grid_size_in_y", "{:d}".format(n_cells))
+    para_dict['grid_box_used'] = L
     return L
+
+
+def music_hit_boundary(results_folder):
+    """True if MUSIC stopped because a freeze-out cell reached the box edge."""
+    log = path.join(results_folder, "run.log")
+    try:
+        with open(log, "r", encoding="utf-8", errors="replace") as f:
+            return "Freeze-out cell at the boundary" in f.read()
+    except OSError:
+        return False
 
 
 def run_trento(event_id):
@@ -1389,7 +1501,8 @@ def write_grid_extent_diagnostic(final_results_folder,
                                  e_path,
                                  grid_max,
                                  grid_step,
-                                 music_seconds=None):
+                                 music_seconds=None,
+                                 extra=None):
     """Record how much transverse space this event actually needed.
 
     Emits one small CSV per event so a whole OSG batch can be collected cheaply
@@ -1430,8 +1543,9 @@ def write_grid_extent_diagnostic(final_results_folder,
             flat = np.loadtxt(src).ravel()
             n = int(round(math.sqrt(flat.size)))
             if n*n == flat.size:
-                L = read_input_value(path.join('TRENTo', 'input'), 'grid-max')
-                L = float(L) if L is not None else grid_max
+                # the array's own extent: grid-max may be written half a
+                # cell short (apply_adaptive_grid)
+                L = n*grid_step/2.0
                 rms = ic_rms_from_flat(flat, L, grid_step)
                 if rms is not None:
                     row['R_rms_trento'] = rms
@@ -1449,6 +1563,9 @@ def write_grid_extent_diagnostic(final_results_folder,
 
     if music_seconds is not None:
         row['music_seconds'] = round(float(music_seconds), 1)
+    for key, value in (extra or {}).items():
+        if value is not None:
+            row[key] = value
 
     out = path.join(final_results_folder, 'grid_extent_{}.csv'.format(event_id))
     try:
@@ -2159,6 +2276,41 @@ def main(para_dict_):
         hydro_success, hydro_folder_name = run_hydro_event(
             final_results_folder, event_id)
 
+        # The freeze-out surface reached the edge of the box: MUSIC stops
+        # ("Freeze-out cell at the boundary!"). With the adaptive grid, redo
+        # the event in a box retry_growth times larger, up to max_half_width
+        # and max_retries times, so the sizing rule only costs efficiency.
+        para_dict_['grid_attempts'] = 1
+        if para_dict_.get('adaptive_grid') and initial_type == "TRENTo":
+            coeffs = read_adaptive_coeffs()
+            step = para_dict_['free_stream_grid_step']
+            while (not hydro_success
+                   and para_dict_['grid_attempts'] <= int(
+                       coeffs.get("max_retries", 2))
+                   and music_hit_boundary(
+                       path.join(final_results_folder, hydro_folder_name))):
+                old_L = float(para_dict_['free_stream_grid_max'])
+                new_L = old_L*float(coeffs.get("retry_growth", 1.25))
+                if coeffs.get("max_half_width") is not None:
+                    new_L = min(new_L, float(coeffs["max_half_width"]))
+                new_L = math.ceil(new_L/step - 1e-9)*step
+                if new_L <= old_L + 1e-9:
+                    break
+                print("\U0001F501  freeze-out reached the edge of +-{:.1f} fm: "
+                      "rerunning event {} in +-{:.1f} fm".format(
+                          old_L, event_id, new_L),
+                      flush=True)
+                para_dict_['grid_floor_half_width'] = new_L
+                initStauts, ifile = get_initial_condition(
+                    initial_condition, initial_type, iev, global_event_id,
+                    para_dict_['seed_add'], final_results_folder, para_dict_)
+                para_dict_['grid_attempts'] += 1
+                if not initStauts:
+                    break
+                hydro_success, hydro_folder_name = run_hydro_event(
+                    final_results_folder, event_id)
+            para_dict_.pop('grid_floor_half_width', None)
+
         if not hydro_success:
             # if hydro didn't finish properly, just skip this event
             print("\U000026D4  {} did not finsh properly, skipped.".format(
@@ -2181,7 +2333,10 @@ def main(para_dict_):
                           'trento_results_{}'.format(event_id), 'e.dat'),
                 para_dict_['free_stream_grid_max'],
                 para_dict_['free_stream_grid_step'],
-                music_seconds=time.time() - t_hydro_start)
+                music_seconds=time.time() - t_hydro_start,
+                extra={k: para_dict_.get(k) for k in (
+                    'grid_box_predicted', 'grid_box_used', 'grid_attempts',
+                    'grid_eos_stiffness') if para_dict_.get('adaptive_grid')})
         except Exception:
             import traceback
             print('grid extent diagnostic failed:\n{}'.format(

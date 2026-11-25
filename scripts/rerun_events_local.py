@@ -17,7 +17,7 @@ Results: <out>/<variant>/results/spvn_results_<id>.h5 (+ TRENTo summary),
 <out>/<variant>/log.csv (event, exit code, seconds), the exact parameter
 file, driver and inner script used, and effective_parameters.txt (the
 generated MUSIC/iSS settings that matter here, from the first event).  Work folders are deleted after a
-successful event unless --keep; a failed one keeps its logs under <out>/<variant>/failed/.
+event unless --keep; a failed one also keeps its logs under <out>/<variant>/failed/.
 """
 
 import argparse
@@ -64,10 +64,10 @@ def run_one(ev, vdir, par, image, per_job, use_driver, nice, keep=False,
         res = os.path.join(vdir, "results")
         for f in h5[:1] + qn[:1]:  # SMASH events have only the qn file
             shutil.copy2(f, res)
-        for f in glob.glob(os.path.join(wd, "playground", "**",
-                                        "trento_event_summary_%d*" % ev),
-                           recursive=True)[:1]:
-            shutil.copy2(f, res)
+        for pat in ("trento_event_summary_%d*", "grid_extent_%d.csv"):
+            for f in glob.glob(os.path.join(wd, "playground", "**", pat % ev),
+                               recursive=True)[:1]:
+                shutil.copy2(f, res)
         eff = os.path.join(wd, "effective_parameters.txt")
         if os.path.exists(eff) and not os.path.exists(os.path.join(vdir, "effective_parameters.txt")):
             shutil.copy2(eff, vdir)
@@ -80,7 +80,8 @@ def run_one(ev, vdir, par, image, per_job, use_driver, nice, keep=False,
         for f in ("docker.log", "run.log", "generate.log", "effective_parameters.txt"):
             if os.path.exists(os.path.join(wd, f)):
                 shutil.copy2(os.path.join(wd, f), fail_dir)
-        shutil.rmtree(wd, ignore_errors=True)
+        if not keep:  # a failure is when the work folder matters most
+            shutil.rmtree(wd, ignore_errors=True)
     return ev, rc, dt
 
 

@@ -1014,8 +1014,16 @@ def generate_event_folders(initial_condition_database, initial_condition_type,
     # The driver looks for this file in the event directory, in model_parameters,
     # or one level up in model_parameters, so it is versioned with the code but
     # still overridable by dropping a file into the working folder.
+    # A campaign may carry its own rule in control_dict['adaptive_grid_coeffs']
+    # (e.g. with the EoS term); it replaces the shipped file entirely.
+    campaign_coeffs = getattr(para_dict, 'control_dict',
+                              {}).get('adaptive_grid_coeffs')
+    if campaign_coeffs:
+        for folder in (param_folder, event_folder):
+            with open(path.join(folder, 'adaptive_grid.json'), 'w') as f:
+                json.dump(campaign_coeffs, f, indent=1, sort_keys=True)
     src_coeffs = path.join(package_root_path, 'config', 'adaptive_grid.json')
-    if path.exists(src_coeffs):
+    if path.exists(src_coeffs) and not campaign_coeffs:
         try:
             shutil.copy(src_coeffs, path.join(param_folder,
                                               'adaptive_grid.json'))
