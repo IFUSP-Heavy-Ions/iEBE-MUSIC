@@ -160,13 +160,18 @@ ENV HOME /opt/
 #   44d5e53 = "merge_qn: also refuse files whose Q grid differs"
 #             (optional HBT sums in qn_<id>.h5, control_dict['hbt']; off by
 #              default, every other output unchanged)
+#   8a0b633 = "pbpb5020-eos: N[5.02 TeV] = 19.6 ..."
+#             (EoS priors with a ln T kernel and a high-T relaxation to 1/3;
+#              MakeDictionaries takes the nucleon correlation from the
+#              template; the driver stops on a MUSIC grid / IC table
+#              mismatch; existing runs unchanged)
 RUN cd ${HOME} && \
     mkdir iEBE-MUSIC && cd iEBE-MUSIC && \
     git init -q . && \
     git remote add origin https://github.com/IFUSP-Heavy-Ions/iEBE-MUSIC.git && \
-    git fetch -q --depth=1 origin 44d5e53321dc0e3b39060c736d85d5d9c4a38434 && \
+    git fetch -q --depth=1 origin 8a0b633fe151069c3f33ea057b81a45af8443d7b && \
     git checkout -q FETCH_HEAD && \
-    test "$(git rev-parse HEAD)" = "44d5e53321dc0e3b39060c736d85d5d9c4a38434" && \
+    test "$(git rev-parse HEAD)" = "8a0b633fe151069c3f33ea057b81a45af8443d7b" && \
     cd codes && \
     bash get_code_packages.sh && \
     ./compile_code_packages.sh && \
