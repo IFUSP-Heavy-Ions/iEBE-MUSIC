@@ -261,8 +261,8 @@ the accepted list are made once and shared.
 
 ## Stages (user's decision, 2026-11-26)
 
-The lattice point runs the whole list. The 50 design points start with a
-smaller sample and get more while the first is analysed.
+The lattice point runs the whole list, and runs first. The 50 design points
+then go in stages of 10,000 positions, each analysed while the next runs.
 
 - The list is `/data/mluzum/pbpb5020_eos/selection_ranked/sel.csv`: the same
   40,723 events and weights as `selection_v2`, sorted by `rank = u/p_acc`
@@ -430,6 +430,10 @@ campaign's values:
 - T_sw also changes the hadron-gas anchor of every EoS table, so the box
   calibration would have to be redone; the bulk viscosity and tau_fs change
   neither the tables nor the draws; the nucleon width changes the draws.
+
+Decision (user, 2026-11-26): every parameter stays at the JETSCAPE value and
+the excess in the radii is accepted. The run is for sensitivity tests and a
+closure test against the lattice point, not a fit to data.
 
 ## Status
 
