@@ -370,26 +370,66 @@ The 39 points not in the first calibration were measured with afterburner
 "decay", whose table has a slightly different hadron-gas part (e_fo 0.1146
 instead of 0.1174 GeV/fm^3). Where both exist the need agrees within 0.2 fm.
 
-## HBT radii at the lattice point (2026-11-25)
+## HBT radii at the lattice point (2026-11-25, corrected 2026-11-26)
 
-The curation session found pion radii 1.4-1.7 times ALICE's in the pilot.
-That is what this parameter set gives; it is not a defect in the sums.
-- Lattice EoS (dp 51), 0-1%, K_T 0.20-0.25 GeV: R_out / R_side / R_long =
-  9.5 / 9.7 / 13.5 fm from the HBT sums.
-- The same widths taken directly from one event's particle list (pions in
-  the same K_T bin, own-LCMS coordinates): 10.4 / 10.1 / 13.2 fm with
-  SMASH, 10.1 / 9.6 / 13.1 fm with decays only. SMASH is not the cause.
+The curation session found pion radii 1.4-1.7 times ALICE's in the pilot. A
+first check here agreed (9.5 / 9.7 / 13.5 fm at K_T 0.20-0.25 GeV); that
+overstated it twice over: the fit was dominated by the lowest q, where
+long-lived resonances sit, and the ALICE values were quoted from memory.
+
+Fitted as a measurement is (3D Gaussian over |q| < 0.15 GeV, each q point
+weighted by the momentum-space volume it stands for, lowest shell dropped),
+lattice EoS (dp 51), pilot events, R_out / R_side / R_long in fm:
+
+| | K_T 0.2-0.3 GeV | K_T 0.3-0.4 GeV |
+|---|---|---|
+| 0-1% (16 events) | 8.35 / 8.75 / 11.31 | 7.35 / 7.70 / 9.17 |
+| 1-5% (8 events) | 8.25 / 8.50 / 10.99 | 7.21 / 7.40 / 8.81 |
+| ALICE 2.76 TeV, 0-5% (PRC 93, 024905, HEPData) | 6.90 / 6.71 / 8.26 | 6.14 / 6.00 / 6.80 |
+| the same times 1.067, (dN_ch/deta)^(1/3) to 5.02 TeV | 7.36 / 7.16 / 8.81 | 6.55 / 6.40 / 7.26 |
+
+So the model is 11-13% above in R_out, 17-19% in R_side and 22-25% in
+R_long. ALICE's systematic uncertainty is 4-7%; lambda is 0.75 here and
+0.33 in that paper, and no Coulomb or detector effect is modelled. The
+other EoS: dp 19 (stiff) 4.9 / 9.9 / 10.1 fm, dp 39 (soft) 11.7 / 8.8 /
+14.6 fm at 0-1%, K_T 0.2-0.3.
+
+What was checked:
+- The sums are faithful: the same widths come directly from one event's
+  particle list, and decays only gives nearly the same as SMASH.
 - The fireball is large and lives long: the T_sw = 136 MeV surface starts
   at r = 10 fm at tau_0 = 1.5 fm/c, grows to 13.5-15 fm, and hydro ends at
-  16.4 fm/c. Half of the emission comes after 13.8 fm/c.
-- The EoS moves it strongly: dp 19 (stiff) gives 5.8 / 11.7 / 11.7 fm,
-  dp 39 (soft) 13.0 / 9.7 / 17.0 fm.
-- Bulk observables at the lattice point, 0-5%: pi+- 1823, K+- 302,
-  p + pbar 94; <pT> 0.532 / 0.858 / 1.421 GeV.
+  16.4 fm/c.
 
-Open (user): this does not matter for a closure test against the lattice
-point. If measured radii enter the likelihood, the EoS would be pulled to
-compensate for parameters that are fixed here (T_sw, nucleon width, tau_fs).
+Bulk observables at the lattice point, 0-5%, against ALICE 5.02 TeV
+(PRC 101, 044907): pi+- 1823 (1700 +- 117), K+- 302 (273 +- 12),
+p + pbar 94 (74.6 +- 3.8); <pT> 0.532 (0.568), 0.858 (0.918), 1.421 (1.448)
+GeV.
+
+Can a parameter bring the radii down? (user's question, 2026-11-26.) One
+change at a time, 4 events of 0-0.005%, SMASH, change relative to the
+campaign's values:
+
+| change | R_out | R_side | R_long | pion <pT> | p/pi |
+|---|---|---|---|---|---|
+| none | 8.70 fm | 8.84 fm | 11.63 fm | 0.545 GeV | 0.051 |
+| T_sw 150 MeV | -6% | -1% | -6% | -1% | 0.061 |
+| T_sw 165 MeV | -10% | -4% | -9% | -2% | 0.063 |
+| (zeta/s)_max 0.05 | -2% | -6% | -4% | +13% | 0.043 |
+| (zeta/s)_max 0.05 and T_sw 150 MeV | -7% | -6% | -8% | +8% | 0.054 |
+| tau_fs 0.5 fm/c | -2% | 0% | -1% | -6% | 0.050 |
+| nucleon width 0.6 fm (pions -8%) | -6% | -2% | -4% | +4% | 0.053 |
+
+(statistical error about 1% on each radius; ALICE p/pi is 0.044.)
+- T_sw moves R_out and R_long by 6% per 14 MeV, R_side hardly, and makes
+  the proton excess worse.
+- R_side moves by at most 6% under anything tried.
+- The bulk viscosity is the only knob that helps more than one thing: half
+  its peak overshoots <pT> by as much as the campaign's value undershoots
+  it, and brings p/pi to the data.
+- T_sw also changes the hadron-gas anchor of every EoS table, so the box
+  calibration would have to be redone; the bulk viscosity and tau_fs change
+  neither the tables nor the draws; the nucleon width changes the draws.
 
 ## Status
 
