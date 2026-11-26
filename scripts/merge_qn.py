@@ -2,7 +2,7 @@
 """Merge the per-event qn_<id>.h5 files of one design point (standard output,
 docs/standard_output.md) into one file with the event axis first.
 
-Usage: merge_qn.py SOURCE_DIR OUTPUT_H5 [--selection PREFIX]
+Usage: merge_qn.py SOURCE_DIR OUTPUT_H5 [--selection PREFIX [--first N]]
 
 SOURCE_DIR holds the qn_<id>.h5 files and the events_drawn*.csv tables of the
 design point.  Rows are sorted by event id.  Events whose fireball never
@@ -11,6 +11,14 @@ sums 0 and nsamples 0.  /drawn lists every drawn id with its fate.  With
 --selection (the PREFIX.csv/.json files of scripts/select_events.py) the
 selection-format-1 attributes are added and accepted events that never came
 back are listed in /drawn as failed.
+
+--first N is for a campaign run in stages from a rank-ordered list
+(select_events.py --order rank): only the first N lines of the list are
+merged.  Events from further down the list are left out even if their files
+are there, because which of them have arrived depends on how long they ran.
+The attributes selection_first = N and selection_fraction = N / (lines in the
+list) are added; the weights stay 1/p_acc, so their sum estimates
+selection_fraction times the number of collided events.
 
 A per-event file that cannot be read is skipped and named; its event then
 appears in /drawn as failed.
@@ -101,7 +109,7 @@ def create(group, name, shape, dtype):
                                 shuffle=True, maxshape=(None,) + tuple(shape[1:]))
 
 
-def merge(src_dir, out_path, selection=None):
+def merge(src_dir, out_path, selection=None, first_n=None):
     files = {}
     for f in glob.glob(os.path.join(src_dir, "qn_*.h5")):
         try:
@@ -121,6 +129,26 @@ def merge(src_dir, out_path, selection=None):
             summary = json.load(fh)
         with open(selection + ".csv", newline="") as fh:
             accepted = {int(r["event_id"]): r for r in csv.DictReader(fh)}
+        n_listed = len(accepted)
+        if first_n is not None:
+            if summary.get("order") != "rank":
+                print("--first needs a list made with select_events.py "
+                      "--order rank; %s.json says order = %r" %
+                      (selection, summary.get("order", "event_id")))
+                return 1
+            if not 0 < first_n <= n_listed:
+                print("--first %d: the list has %d lines" % (first_n, n_listed))
+                return 1
+            accepted = dict(list(accepted.items())[:first_n])
+            beyond = sorted(ev for ev in files if ev not in accepted)
+            if beyond:
+                print("left out %d events beyond line %d of the list" %
+                      (len(beyond), first_n), flush=True)
+            files = {ev: f for ev, f in files.items() if ev in accepted}
+            drawn = {ev: r for ev, r in drawn.items() if ev in accepted}
+            if not files:
+                print("no event of the first %d lines in %s" % (first_n, src_dir))
+                return 1
 
     # fate of every drawn id
     fate = {}
@@ -287,6 +315,9 @@ def merge(src_dir, out_path, selection=None):
                 out.attrs["covered_centrality"] = summary["covered_centrality"]
             # as in selection format 1 (merge_dp_h5.py): the whole summary
             out.attrs["selection"] = json.dumps(summary)
+            if first_n is not None:
+                out.attrs["selection_first"] = int(first_n)
+                out.attrs["selection_fraction"] = first_n / n_listed
         out.attrs["n_events"] = n
     os.replace(out_path + ".tmp", out_path)
     counts = {k: sum(1 for s in fate.values() if s == k) for k in STATUS}
@@ -299,8 +330,13 @@ def main():
     ap.add_argument("source_dir")
     ap.add_argument("output_h5")
     ap.add_argument("--selection", help="prefix of the select_events.py files")
+    ap.add_argument("--first", type=int,
+                    help="merge only the first N lines of a rank-ordered list")
     args = ap.parse_args()
-    sys.exit(merge(args.source_dir, args.output_h5, args.selection))
+    if args.first is not None and not args.selection:
+        ap.error("--first needs --selection")
+    sys.exit(merge(args.source_dir, args.output_h5, args.selection,
+                   args.first))
 
 
 if __name__ == "__main__":

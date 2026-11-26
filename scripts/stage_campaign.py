@@ -74,6 +74,12 @@ def main():
                     "selection_dp<NNNN>.csv from scripts/select_events.py. Each "
                     "design point then gets as many jobs as its list needs, "
                     "and jobs own positions of the list instead of event ids")
+    ap.add_argument("--selection",
+                    help="importance sampling with one list for every design "
+                    "point (the .csv of scripts/select_events.py). With a "
+                    "rank-ordered list a stage of the campaign is a range of "
+                    "positions: --offsets <first position> and --n-jobs "
+                    "<positions / --n-events>")
     ap.add_argument("--image", required=True)
     ap.add_argument("--apbase", required=True, help="AP output root (<apbase>/<dp>)")
     ap.add_argument("--aphome", required=True, help="AP staging root on the home disk")
@@ -89,6 +95,13 @@ def main():
     args = ap.parse_args()
 
     offsets = [int(x) for x in args.offsets.split(",") if x.strip() != ""]
+    if args.selection and args.selection_dir:
+        ap.error("--selection and --selection-dir exclude each other")
+    # The generator tags a batch's archives with its offset only when the
+    # offset is a multiple of 2000; any other one would write over batch 1's.
+    bad = [o for o in offsets if o % 2000]
+    if bad:
+        ap.error("offsets must be multiples of 2000 (archive names): %s" % bad)
     dps = parse_dps(args.dps)
     out = args.out
     shutil.rmtree(out, ignore_errors=True)
@@ -117,9 +130,9 @@ def main():
             #   'zr96_b{batch}_dp{dp}' -> zr96_b2_dp0421
             jobid = args.jobid_template.format(batch=batch_index, dp="%04d" % dp)
             n_jobs, event_list = args.n_jobs, None
-            if args.selection_dir:
-                event_list = os.path.join(args.selection_dir,
-                                          "selection_dp%04d.csv" % dp)
+            if args.selection_dir or args.selection:
+                event_list = args.selection or os.path.join(
+                    args.selection_dir, "selection_dp%04d.csv" % dp)
                 if not os.path.isfile(event_list):
                     print("MISSING_SELECTION %d" % dp, file=sys.stderr)
                     continue

@@ -84,5 +84,22 @@ assert both > 0.85
 # 6. coverage: a sample cut in impact parameter does not reach 100%
 t60 = es.calibrate(est[b < 0.6], coverage=0.6)
 assert abs(max(t60["percent"]) - 60.0) < 1e-9
+
+# 7. staged runs (select_events.py --order rank): the accepted events sorted by
+# rank = u/p_acc; a prefix is the selection with every acceptance scaled by its
+# last rank, in random order, and gives the same weighted averages
+rank = uu[accA] / pA[accA]
+by_rank = np.argsort(rank)
+ids_A, wA, obs_A, c_A = ids[accA][by_rank], 1 / pA[accA][by_rank], obs[accA][by_rank], c[accA][by_rank]
+m = len(ids_A) // 4
+r_m = np.sort(rank)[m]                           # rank of the first line left out
+assert set(ids_A[:m]) == set(ids[uu < r_m * pA])
+assert abs(r_m - 0.25) < 0.01
+assert abs(np.corrcoef(np.arange(len(c_A)), c_A)[0, 1]) < 0.02     # order unrelated to centrality
+full = np.sum(wA * obs_A) / np.sum(wA)
+part = np.sum(wA[:m] * obs_A[:m]) / np.sum(wA[:m])
+assert abs(part / full - 1) < 0.01, (part, full)
+assert abs(np.sum(wA[:m]) / r_m / n - 1) < 0.03, np.sum(wA[:m]) / r_m / n   # sum of weights / rank = drawn events
+
 print("effective size of the accepted sample: %.0f of %d" % (es.effective_size(w[acc]), acc.sum()))
 print("all checks passed")

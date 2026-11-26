@@ -195,7 +195,10 @@ The selection-format-1 contract (`docs/importance_sampling.md`) carries over
 unchanged in content: root attributes `selection_format = 1`, `n_drawn`,
 `n_collided`, `n_no_collision`, `n_accepted`, `covered_centrality`,
 `selection` (the whole summary of `select_events.py` as a JSON string, as in
-format 1). The per-event
+format 1). A design point merged from the first `N` positions of a
+rank-ordered list (`merge_qn.py --first N`, a campaign run in stages) also has
+`selection_first = N` and `selection_fraction = N/n_accepted`; sums of
+weights then estimate `selection_fraction` times the usual counts. The per-event
 weight and selection values are the `/events` datasets instead of attributes
 of each event group, and `/drawn` replaces the selection csv. The minimum-bias
 denominator remains `n_collided`, not the number of rows and not sum(weight).

@@ -7,7 +7,9 @@ event selection (codes/event_selection.py) and writes
 
     <out>.csv   the accepted events, one per line, in event-id order:
                 event_id, weight, p_acc, centrality, estimator, u.  This is
-                the list the full chain runs from (IEBE_EVENT_LIST)
+                the list the full chain runs from (IEBE_EVENT_LIST).
+                With --order rank the lines are sorted by rank = u/p_acc
+                (a further column) instead: see below
     <out>.npz   the same plus u and b, and the calibration table
     <out>.json  what is needed to interpret them: the selection, the master
                 seed, how many events were drawn and how many collided, the
@@ -18,6 +20,14 @@ regenerates from the event ids.
 
     python3 scripts/select_events.py --draws 'draws_dp0001_*.npz' \\
         --selection campaigns/<name>/event_selection.json --out selection_dp0001
+
+--order rank is for a campaign that runs in stages.  For an accepted event
+u/p_acc is uniform in [0, 1) whatever its centrality, so the list sorted by it
+is in random order and its first n lines are what the same draws give when
+every acceptance is scaled by rank_n (the rank of line n): an unbiased sample
+with the same weights, up to that common factor.  Run positions [0, n) of the
+list first and [n, m) later (the generator's -event_start_id), and merge with
+merge_qn.py --first.
 
 The selection file is the `event_selection` dictionary described in
 codes/event_selection.py, without the calibration (it is computed here), e.g.
@@ -138,6 +148,10 @@ def main():
         "<out>.npz instead of computing it from --draws.  A frozen table "
         "keeps earlier decisions unchanged when more events are drawn later "
         "(an augmentation batch), and lets design points share one table")
+    ap.add_argument(
+        "--order", default="event_id", choices=["event_id", "rank"],
+        help="order of the list: by event id, or by rank = u/p_acc, which "
+        "makes every prefix of the list an unbiased sample (staged runs)")
     args = ap.parse_args()
 
     files = sorted(glob.glob(args.draws))
@@ -197,15 +211,25 @@ def main():
     # an event that does not collide has nothing to simulate
     accepted &= est > 0
     weight = 1.0 / p[accepted]
+    cols = {
+        "event_id": ids[accepted],
+        "weight": weight,
+        "p_acc": p[accepted],
+        "u": u[accepted],
+        "centrality": cent[accepted],
+        "estimator": est[accepted],
+        "b": b[accepted],
+    }
+    if args.order == "rank":
+        if config.get("mode", "none") == "none":
+            sys.exit("--order rank needs a selection (mode is none)")
+        cols["rank"] = cols["u"] / cols["p_acc"]
+        # ties (none in practice) broken by event id
+        by_rank = np.lexsort((cols["event_id"], cols["rank"]))
+        cols = {k: v[by_rank] for k, v in cols.items()}
 
     np.savez_compressed(args.out + ".npz",
-                        event_id=ids[accepted],
-                        weight=weight,
-                        p_acc=p[accepted],
-                        u=u[accepted],
-                        centrality=cent[accepted],
-                        estimator=est[accepted],
-                        b=b[accepted],
+                        **cols,
                         n_drawn=len(ids),
                         coverage=coverage,
                         calibration_percent=np.array(table["percent"]),
@@ -213,12 +237,16 @@ def main():
 
     # The list the full chain runs from (IEBE_EVENT_LIST): one line per
     # accepted event, in event-id order.  A job owns a range of its lines.
+    # With --order rank the lines are in rank order and carry the rank.
+    names = ["event_id", "weight", "p_acc", "centrality", "estimator", "u"]
+    fmt = "{:d},{:.10g},{:.10g},{:.6f},{:.10e},{:.10f}"
+    if args.order == "rank":
+        names.append("rank")
+        fmt += ",{:.10f}"
     with open(args.out + ".csv", "w") as fh:
-        fh.write("event_id,weight,p_acc,centrality,estimator,u\n")
-        for row in zip(ids[accepted], weight, p[accepted], cent[accepted],
-                       est[accepted], u[accepted]):
-            fh.write("{:d},{:.10g},{:.10g},{:.6f},{:.10e},{:.10f}\n".format(
-                *row))
+        fh.write(",".join(names) + "\n")
+        for row in zip(*(cols[k] for k in names)):
+            fh.write(fmt.format(*row) + "\n")
 
     # Percent of the inelastic cross section, like every centrality here; the
     # drawn sample itself ends at 100 * coverage.
@@ -240,6 +268,7 @@ def main():
                    "0x53454C45, 0, 0]).random(); accepted if u < p_acc",
         "weight": "1/p_acc, not normalised: the sum of weights estimates the "
                   "number of collided events in the covered range",
+        "order": args.order,
         "estimator": args.estimator,
         "coverage": args.coverage,
         "master_seed": master_seed,

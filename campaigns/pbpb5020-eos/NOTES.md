@@ -259,6 +259,35 @@ the accepted list are made once and shared.
 | 60-100% | 615 | 436 |
 | total | 40,740 | |
 
+## Stages (user's decision, 2026-11-26)
+
+The lattice point runs the whole list. The 50 design points start with a
+smaller sample and get more while the first is analysed.
+
+- The list is `/data/mluzum/pbpb5020_eos/selection_ranked/sel.csv`: the same
+  40,723 events and weights as `selection_v2`, sorted by `rank = u/p_acc`
+  (`select_events.py --order rank`). That is a random order, and every prefix
+  is the selection with all acceptances scaled down: the same weights, the
+  same shape in centrality (docs/importance_sampling.md, "Running in stages").
+- A stage is a range of positions. Boundaries are multiples of 2000 (archive
+  names): [0, 10000), [10000, 20000), [20000, 30000), [30000, 40723).
+- Merge a design point with `merge_qn.py --selection sel --first N`.
+
+| bin | whole list | first 10,000 | first 20,000 | first 30,000 |
+|---|---|---|---|---|
+| 0-0.005% | 584 | 159 | 314 | 454 |
+| 0-0.02% | 1,300 | 352 | 683 | 996 |
+| 0-0.2% | 4,336 | 1,069 | 2,178 | 3,221 |
+| 0-1% | 9,899 | 2,436 | 4,887 | 7,306 |
+| each of 1-2, ..., 4-5% | about 5,000 | about 1,220 | about 2,450 | about 3,680 |
+| 5-10% | 2,933 | 730 | 1,432 | 2,134 |
+| each of 10-20, ..., 50-60% | about 1,500 | about 370 | about 740 | about 1,120 |
+| 60-100% | 353 | 92 | 167 | 260 |
+
+Cost at about 11 min per event (pilot 12-15 min on the fixed box, times 0.8):
+the lattice point 7,500 CPU-hours, each stage of 10,000 events at 50 points
+92,000.
+
 ## Design (2026-11-25)
 
 There are 50 training points and no held-out validation set. That was the
@@ -277,7 +306,8 @@ is validated by leave-one-out and leave-a-block-out cross-validation.
   - 4 modes miss the lattice c_s^2 by at most 0.027 above T_sw (at the
     150 MeV dip); the larger miss below T_sw never enters the hydro.
 
-Budget: 51 runs x 40,740 events x about 7 min = about 240,000 CPU-hours.
+Budget: 51 runs x 40,740 events x about 7 min = about 240,000 CPU-hours was
+the plan. The pilot measured 12-15 min per event; see "Stages" above.
 
 ## Hydro box (2026-11-25)
 

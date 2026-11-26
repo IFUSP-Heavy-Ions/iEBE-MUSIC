@@ -195,6 +195,38 @@ it, the list gaining a `status` column:
 | `no_surface` | collided, nothing to particlize | an event with no particles, with its weight |
 | `failed` | nothing came back (lost job, crash) | re-run; never count as empty |
 
+## Running in stages
+
+A campaign that wants a first, smaller sample and more events later uses one
+list in a random order of which every prefix is a valid sample.
+
+```bash
+python3 scripts/select_events.py ... --order rank --out sel
+```
+
+sorts the accepted events by `rank = u/p_acc` (a further column of `sel.csv`).
+For an accepted event the rank is uniform in [0, 1) whatever its centrality,
+so the first `n` lines are exactly what the same draws give with every
+acceptance multiplied by the rank of line `n`: the same weights, the same
+shape in centrality, `n/n_accepted` of the events in every bin (up to counting
+noise).
+
+* A stage is a range of positions of the list. Stage it with
+  `stage_campaign.py --selection sel.csv --offsets <first position> --n-jobs
+  <positions / --n-events>`. Offsets must be multiples of 2000: the archive
+  names carry the offset only then.
+* Design points may be at different stages. An event is the same event at
+  every design point, whatever its position.
+* Merge a design point with `merge_qn.py ... --selection sel --first N`, `N`
+  the number of positions it has run. Events from further down the list are
+  left out even if they are back: which of an unfinished stage's events have
+  arrived depends on how long they ran, which depends on centrality.
+* The merged file gets `selection_first = N` and `selection_fraction =
+  N/n_accepted`. Weighted averages need nothing else. Where a sum of weights
+  is compared with a count of drawn events, divide it by `selection_fraction`:
+  the fraction of the cross section above a multiplicity `M` is
+  `sum(w_i [M_i > M]) / (selection_fraction n_collided)`.
+
 ## Using the weights
 
 * Every event average is `sum(w O)/sum(w)`.
