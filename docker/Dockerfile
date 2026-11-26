@@ -174,13 +174,18 @@ ENV HOME /opt/
 #   3977465 = "Build SMASH for the baseline x86-64, and check every binary for AVX"
 #             (SMASH without -march=native: runs on x86-64-v2 workers; its
 #              output changes in the last bits, every other code identical)
+#   ca5941d = "pbpb5020-eos notes: parameters stay at JETSCAPE; ..."
+#             (the adaptive grid can grow and retries at the boundary, with
+#              an optional rule per EoS table; grid_extent gains columns.
+#              control_dict['adaptive_grid'] is off by default: runs without
+#              it unchanged. No physics code changed)
 RUN cd ${HOME} && \
     mkdir iEBE-MUSIC && cd iEBE-MUSIC && \
     git init -q . && \
     git remote add origin https://github.com/IFUSP-Heavy-Ions/iEBE-MUSIC.git && \
-    git fetch -q --depth=1 origin 397746591d59bf0e664bfd79d79e889de902a5a8 && \
+    git fetch -q --depth=1 origin ca5941d66951478083d080febf40a26a43823acb && \
     git checkout -q FETCH_HEAD && \
-    test "$(git rev-parse HEAD)" = "397746591d59bf0e664bfd79d79e889de902a5a8" && \
+    test "$(git rev-parse HEAD)" = "ca5941d66951478083d080febf40a26a43823acb" && \
     cd codes && \
     bash get_code_packages.sh && \
     ./compile_code_packages.sh && \
